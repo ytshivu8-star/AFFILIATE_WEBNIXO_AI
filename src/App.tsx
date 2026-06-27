@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, MousePointerClick, Users, DollarSign, ArrowUpRight, 
   Award, FileText, Settings, CreditCard, LogOut, Shield, Menu, X, Check, Lock, UserCheck,
-  ArrowLeft, ShieldCheck, Mail, Key, RefreshCw
+  ArrowLeft, ArrowRight, Copy, ShieldCheck, Mail, Key, RefreshCw
 } from 'lucide-react';
 import { UserProfile, PayoutDetails, AffiliateStats, LeaderboardEntry, ReferralEvent, PayoutHistoryItem } from './types';
 import Dashboard from './components/Dashboard';
@@ -119,18 +119,53 @@ export default function App() {
   ]);
 
   // Leaderboard data
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([
-    { rank: 1, name: 'AI Marketing Guru', sales: 48, commission: 1440.00 },
-    { rank: 2, name: 'Web Dev Academy', sales: 34, commission: 1020.00 },
-    { rank: 3, name: 'SaaS Review Hub', sales: 21, commission: 630.00 },
-    { rank: 4, name: 'Design Wizards', sales: 15, commission: 450.00 },
-    { rank: 5, name: 'Sagar Patel', sales: 11, commission: 330.00 },
-    { rank: 6, name: 'BuildFast Agency', sales: 8, commission: 240.00 },
-    // Current user Shiva is placed below, but will dynamically climb!
-    { rank: 7, name: 'Shiva', sales: 4, commission: 114.60, isCurrentUser: true },
-    { rank: 8, name: 'AI Horizon', sales: 3, commission: 90.00 },
-    { rank: 9, name: 'Nikhil_K', sales: 2, commission: 60.00 },
-  ]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  // Dynamically update the genuine leaderboard from real local storage users
+  useEffect(() => {
+    try {
+      const globalUsersStr = localStorage.getItem('webnixo_global_users');
+      let list: any[] = [];
+      if (globalUsersStr) {
+        list = JSON.parse(globalUsersStr);
+      }
+      
+      // Filter out admin
+      list = list.filter(u => u.email !== 'shiva@webnixo.in');
+
+      // Map profiles to LeaderboardEntry structure
+      let entries: LeaderboardEntry[] = list.map((u: any) => ({
+        rank: 0,
+        name: u.fullName || u.email.split('@')[0],
+        sales: u.sales || 0,
+        commission: u.commissionEarned || 0,
+        isCurrentUser: u.email.toLowerCase() === user.email.toLowerCase()
+      }));
+
+      // If current user is registered but not in global users yet, add them manually
+      if (user.isRegisteredAffiliate && user.email && user.email !== 'shiva@webnixo.in') {
+        const hasUser = entries.some(e => e.isCurrentUser);
+        if (!hasUser) {
+          entries.push({
+            rank: 0,
+            name: user.fullName || 'You',
+            sales: stats.sales,
+            commission: stats.commissionEarned,
+            isCurrentUser: true
+          });
+        }
+      }
+
+      // Sort by sales descending, then by commission descending
+      entries.sort((a, b) => b.sales - a.sales || b.commission - a.commission);
+      
+      // Assign dynamic rank
+      const rankedEntries = entries.map((e, idx) => ({ ...e, rank: idx + 1 }));
+      setLeaderboard(rankedEntries);
+    } catch (e) {
+      console.error("Error calculating dynamic leaderboard", e);
+    }
+  }, [activeTab, user, stats]);
 
   // Resend diagnostic configuration status
   const [resendStatus, setResendStatus] = useState<{ isCustomKey: boolean; maskedKey: string; fromEmail: string } | null>(null);
@@ -141,6 +176,87 @@ export default function App() {
       .then(data => setResendStatus(data))
       .catch(err => console.warn("Error fetching Resend status:", err));
   }, []);
+
+  // Dynamic Browser Routing and State Synchronization
+  useEffect(() => {
+    const syncRouteFromPath = () => {
+      const path = window.location.pathname;
+      const cachedIsLoggedIn = localStorage.getItem('wwebnixo_isLoggedIn') === 'true';
+      const cachedIsAdmin = localStorage.getItem('wwebnixo_isAdmin') === 'true';
+
+      if (path === '/login' || path === '/') {
+        if (!cachedIsLoggedIn) {
+          setIsLoggedIn(false);
+          setAuthMode('login');
+        }
+      } else if (path === '/signup' || path === '/register') {
+        if (!cachedIsLoggedIn) {
+          setIsLoggedIn(false);
+          setAuthMode('signup');
+        }
+      } else if (cachedIsLoggedIn) {
+        setIsLoggedIn(true);
+        if (path === '/admin' && cachedIsAdmin) {
+          setIsAdminMode(true);
+        } else {
+          setIsAdminMode(false);
+          if (path === '/dashboard') setActiveTab('dashboard');
+          else if (path === '/resources') setActiveTab('resources');
+          else if (path === '/payouts' || path === '/payout') setActiveTab('payout');
+          else if (path === '/leaderboard') setActiveTab('leaderboard');
+          else if (path === '/terms') setActiveTab('terms');
+          else if (path === '/profile') setActiveTab('profile');
+        }
+      } else {
+        // Not logged in but requesting a protected page - default to /login
+        setIsLoggedIn(false);
+        setAuthMode('login');
+        window.history.replaceState({}, '', '/login');
+      }
+    };
+
+    // Run on initial mount
+    syncRouteFromPath();
+
+    // Listen to browser navigation buttons (Back/Forward)
+    window.addEventListener('popstate', syncRouteFromPath);
+    return () => {
+      window.removeEventListener('popstate', syncRouteFromPath);
+    };
+  }, []);
+
+  // Automatically update the browser address bar whenever react states change
+  useEffect(() => {
+    if (!isLoggedIn) {
+      if (authMode === 'login') {
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
+          window.history.pushState({}, '', '/login');
+        }
+      } else if (authMode === 'signup') {
+        if (window.location.pathname !== '/signup' && window.location.pathname !== '/register') {
+          window.history.pushState({}, '', '/signup');
+        }
+      }
+    } else {
+      if (isAdminMode) {
+        if (window.location.pathname !== '/admin') {
+          window.history.pushState({}, '', '/admin');
+        }
+      } else {
+        let expectedPath = '/dashboard';
+        if (activeTab === 'dashboard') expectedPath = '/dashboard';
+        else if (activeTab === 'resources') expectedPath = '/resources';
+        else if (activeTab === 'payout') expectedPath = '/payouts';
+        else if (activeTab === 'leaderboard') expectedPath = '/leaderboard';
+        else if (activeTab === 'terms') expectedPath = '/terms';
+        else if (activeTab === 'profile') expectedPath = '/profile';
+
+        if (window.location.pathname !== expectedPath) {
+          window.history.pushState({}, '', expectedPath);
+        }
+      }
+    }
+  }, [isLoggedIn, authMode, activeTab, isAdminMode]);
 
   // Timer for OTP resend cooldown
   useEffect(() => {
@@ -383,98 +499,8 @@ export default function App() {
       if (globalUsersStr) {
         globalUsersList = JSON.parse(globalUsersStr);
       } else {
-        // Fallback default mock list of users
-        globalUsersList = [
-          {
-            id: 'user_1',
-            email: 'aravind.s@gmail.com',
-            password: 'aravind_pass123',
-            fullName: 'Aravind S',
-            companyName: 'TechVibe Creative',
-            website: 'techvibe.in',
-            promoStrategy: 'Tech Blog Reviews & YouTube videos',
-            country: 'India',
-            referralCode: 'aravind_tech',
-            customCouponCode: 'ARAVIND20',
-            sales: 18,
-            commissionEarned: 3500.00,
-            unpaidCommission: 1250.00,
-            payoutMethod: 'upi',
-            payoutDetails: 'aravind@okaxis',
-            status: 'Active'
-          },
-          {
-            id: 'user_2',
-            email: 'priya.patel@outlook.com',
-            password: 'priya_secure987',
-            fullName: 'Priya Patel',
-            companyName: 'GrowScale Digital',
-            website: 'growscaledigital.com',
-            promoStrategy: 'Weekly SaaS newsletters & LinkedIn posts',
-            country: 'India',
-            referralCode: 'priya_growth',
-            customCouponCode: 'PRIYA20',
-            sales: 14,
-            commissionEarned: 2800.00,
-            unpaidCommission: 2400.00,
-            payoutMethod: 'bank',
-            payoutDetails: 'HDFC Bank (A/C: 9812739102, IFSC: HDFC0000123)',
-            status: 'Active'
-          },
-          {
-            id: 'user_3',
-            email: 'rahul.sharma@gmail.com',
-            password: 'rahul_sharma321',
-            fullName: 'Rahul Sharma',
-            companyName: 'Sharma & Sons Media',
-            website: 'sharmamedia.co',
-            promoStrategy: 'PPC search campaigns & niche blogs',
-            country: 'India',
-            referralCode: 'rahul_media',
-            customCouponCode: 'RAHUL20',
-            sales: 8,
-            commissionEarned: 1600.00,
-            unpaidCommission: 0.00,
-            payoutMethod: 'upi',
-            payoutDetails: 'sharma@paytm',
-            status: 'Active'
-          },
-          {
-            id: 'user_4',
-            email: 'info@techvantage.ai',
-            password: 'vantage_secure456',
-            fullName: 'TechVantage AI',
-            companyName: 'TechVantage Labs',
-            website: 'techvantage.ai',
-            promoStrategy: 'Podcast sponsorships & community recommendations',
-            country: 'India',
-            referralCode: 'vantage_ai',
-            customCouponCode: 'VANTAGE10',
-            sales: 24,
-            commissionEarned: 4800.00,
-            unpaidCommission: 800.00,
-            payoutMethod: 'bank',
-            payoutDetails: 'ICICI Bank (A/C: 1122334455, IFSC: ICIC0000102)',
-            status: 'Active'
-          },
-          {
-            id: 'user_5',
-            email: 'deepak.v@designcraft.io',
-            password: 'deepak_craft654',
-            fullName: 'Deepak Verma',
-            companyName: 'DesignCraft Studio',
-            website: 'designcraft.io',
-            promoStrategy: 'Recommended to direct web clients',
-            country: 'India',
-            referralCode: 'deepak_craft',
-            sales: 1,
-            commissionEarned: 99.80,
-            unpaidCommission: 99.80,
-            payoutMethod: 'upi',
-            payoutDetails: 'deepakv@ybl',
-            status: 'Suspended'
-          }
-        ];
+        // Fallback default list of users (purely genuine, starts empty)
+        globalUsersList = [];
       }
 
       const existsIndex = globalUsersList.findIndex(u => u.email.toLowerCase() === uProfile.email.toLowerCase());
@@ -1159,6 +1185,33 @@ export default function App() {
   // Direct Google Drive image url for WEBNIXO AI Logo (dynamic from localStorage)
   const companyLogoUrl = localStorage.getItem('webnixo_marketing_logoUrl') || "https://lh3.googleusercontent.com/d/11yuTE40NZx1imt0DARVHUfIPTrgtrJA6=s512";
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const getCurrentPathStr = () => {
+    if (!isLoggedIn) {
+      return authMode === 'login' ? '/login' : '/signup';
+    }
+    if (isAdminMode) {
+      return '/admin';
+    }
+    if (activeTab === 'dashboard') return '/dashboard';
+    if (activeTab === 'resources') return '/resources';
+    if (activeTab === 'payout') return '/payouts';
+    if (activeTab === 'leaderboard') return '/leaderboard';
+    if (activeTab === 'terms') return '/terms';
+    if (activeTab === 'profile') return '/profile';
+    return '/dashboard';
+  };
+
+  const currentPathStr = getCurrentPathStr();
+  const simulatedUrl = `affiliate.webnixo.in${currentPathStr}`;
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(`https://${simulatedUrl}`);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       
@@ -1190,35 +1243,6 @@ export default function App() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 tracking-tight">WEBNIXO AI Affiliate Partner</h2>
                 <p className="text-xs text-slate-500 mt-1">Sign in to launch, manage, and scale your passive referral commissions.</p>
-                {resendStatus && (
-                  <div className="mt-2.5 space-y-1.5">
-                    <div className={`p-2 rounded-lg text-[10px] flex items-center justify-between font-medium border ${
-                      resendStatus.isCustomKey 
-                        ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
-                        : "bg-amber-50/50 border-amber-100 text-amber-800"
-                    }`}>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${resendStatus.isCustomKey ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
-                        <span>
-                          {resendStatus.isCustomKey 
-                            ? `Custom Resend Key: ${resendStatus.maskedKey}` 
-                            : "Demo Key Active (Falling back to sandbox)"}
-                        </span>
-                      </div>
-                      <span className="opacity-80 font-mono">From: {resendStatus.fromEmail.replace(/.*<(.+)>/, "$1")}</span>
-                    </div>
-
-                    {!resendStatus.isCustomKey && (
-                      <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-600 leading-relaxed">
-                        <span className="font-semibold text-slate-700 block mb-0.5">How to send from auth.webnixo.in:</span>
-                        1. Go to your <span className="font-semibold text-slate-800">Vercel Project Dashboard</span> &rarr; <span className="font-semibold text-slate-800">Settings</span> &rarr; <span className="font-semibold text-slate-800">Environment Variables</span>.<br />
-                        2. Add <code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded font-mono">RESEND_API_KEY</code> = <span className="text-slate-500 font-mono">your_actual_resend_key</span>.<br />
-                        3. Add <code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded font-mono">RESEND_FROM_EMAIL</code> = <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono">no-reply@auth.webnixo.in</code>.<br />
-                        4. <span className="font-semibold text-rose-600">IMPORTANT:</span> Go to the Vercel Deployments tab and click <span className="font-semibold text-slate-800">Redeploy</span> to activate these variables!
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1358,23 +1382,6 @@ export default function App() {
                   </div>
                 )}
 
-                {backupOtpDelivery?.visible && (
-                  <div className="p-3 bg-indigo-50 border border-indigo-100/60 rounded-xl text-[11px] space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldCheck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
-                      <span className="font-extrabold text-indigo-950">Secure OTP Helper</span>
-                    </div>
-                    <p className="text-slate-500 leading-normal text-[10px]">
-                      {backupOtpDelivery.type === 'real' 
-                        ? "Real email dispatched via Resend! In case your mail provider blocks or filters on-boarding accounts, please use this generated security code:"
-                        : "Resend sandbox fallback routing triggered. Use this code to successfully complete the verification stage in our live simulation:"}
-                    </p>
-                    <div className="flex items-center justify-center py-2 bg-white border border-indigo-200 rounded-lg font-mono text-base font-black text-indigo-700 tracking-widest">
-                      {backupOtpDelivery.otp}
-                    </div>
-                  </div>
-                )}
-
                 <form onSubmit={async (e) => {
                   e.preventDefault();
                   setOtpError('');
@@ -1409,7 +1416,7 @@ export default function App() {
                     if (otpInput.trim() === otpCode) {
                       verified = true;
                     } else {
-                      setOtpError("Incorrect security code. Please check your inbox or use the preview generator helper code above.");
+                      setOtpError("Incorrect security code. Please check your inbox.");
                     }
                   }
 
@@ -1810,6 +1817,35 @@ export default function App() {
                     events={events} 
                     chartData={chartData} 
                     onUpdateUser={handleUpdateProfile}
+                    onNavigate={(route) => {
+                      if (route === 'login') {
+                        setIsLoggedIn(false);
+                        setAuthMode('login');
+                        window.history.pushState({}, '', '/login');
+                      } else if (route === 'signup') {
+                        setIsLoggedIn(false);
+                        setAuthMode('signup');
+                        window.history.pushState({}, '', '/signup');
+                      } else if (route === 'admin') {
+                        setIsAdminMode(true);
+                        window.history.pushState({}, '', '/admin');
+                      } else if (route === 'logout') {
+                        handleLogout();
+                        window.history.pushState({}, '', '/login');
+                      } else {
+                        setIsAdminMode(false);
+                        setActiveTab(route as any);
+                        const pathMap: Record<string, string> = {
+                          dashboard: '/dashboard',
+                          resources: '/resources',
+                          payout: '/payouts',
+                          leaderboard: '/leaderboard',
+                          terms: '/terms',
+                          profile: '/profile'
+                        };
+                        window.history.pushState({}, '', pathMap[route] || '/dashboard');
+                      }
+                    }}
                   />
                 )}
                 

@@ -22,7 +22,7 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
     website: '',
     promoStrategy: 'blog',
     customStrategy: '',
-    country: 'United States',
+    country: 'India',
     acceptedTerms: false
   });
 
@@ -33,9 +33,7 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
     if (!formData.fullName.trim()) newErrors.fullName = 'Full Name is required';
     if (!formData.phone.trim()) newErrors.phone = 'Phone Number is required';
     if (!formData.website.trim()) {
-      newErrors.website = 'Website or Social Media Profile URL is required';
-    } else if (!formData.website.startsWith('http://') && !formData.website.startsWith('https://')) {
-      newErrors.website = 'URL must start with http:// or https://';
+      newErrors.website = 'Instagram ID or Social Media profile is required';
     }
     if (!formData.acceptedTerms) newErrors.acceptedTerms = 'You must accept the terms & conditions';
     
@@ -119,7 +117,7 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
                 </label>
                 <input
                   type="tel"
-                  placeholder="+1 (555) 019-2834"
+                  placeholder="+91 XXXXX XXXXX"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className={`w-full bg-white border ${errors.phone ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500'} rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1`}
@@ -128,40 +126,22 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
               </div>
             </div>
 
-            {/* Company / Website */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                  Company Name <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="My Agency Ltd"
-                    value={formData.companyName}
-                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                    className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
+            {/* Instagram / Social Media Link */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
+                Instagram ID or Social Media Link <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Globe className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="@username or profile link (e.g., https://instagram.com/username)"
+                  value={formData.website}
+                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  className={`w-full bg-white border ${errors.website ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500'} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-1`}
+                />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                  Website / Portfolio <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Globe className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="https://example.com"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className={`w-full bg-white border ${errors.website ? 'border-red-300 focus:ring-red-500' : 'border-slate-200 focus:ring-indigo-500'} rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-1`}
-                  />
-                </div>
-                {errors.website && <p className="text-xs text-red-500 mt-1">{errors.website}</p>}
-              </div>
+              {errors.website && <p className="text-xs text-red-500 mt-1">{errors.website}</p>}
             </div>
 
             {/* Promotion Strategy */}
@@ -179,7 +159,7 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
                   <option value="blog">Blog Posts & SEO Content</option>
                   <option value="youtube">YouTube Videos & Reviews</option>
                   <option value="newsletters">Email Newsletter Recommendation</option>
-                  <option value="social">Social Media Campaigns (Twitter/LinkedIn)</option>
+                  <option value="social">Social Media Campaigns (Instagram/Twitter/LinkedIn)</option>
                   <option value="agency">Direct Referral to Agency Clients</option>
                   <option value="other">Other strategy (Specify below)</option>
                 </select>
@@ -200,18 +180,28 @@ export default function AffiliateRegistration({ onRegister, userEmail }: Affilia
               </div>
             )}
 
-            {/* Country */}
+            {/* Country of Residence Dropdown */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
                 Your Country of Residence
               </label>
-              <input
-                type="text"
-                placeholder="India, United States, United Kingdom, etc."
+              <select
                 value={formData.country}
                 onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
+                className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none cursor-pointer"
+              >
+                <option value="India">India</option>
+                <option value="United States">United States</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="Canada">Canada</option>
+                <option value="Australia">Australia</option>
+                <option value="Singapore">Singapore</option>
+                <option value="United Arab Emirates">United Arab Emirates</option>
+                <option value="Saudi Arabia">Saudi Arabia</option>
+                <option value="Germany">Germany</option>
+                <option value="France">France</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
 
             {/* Terms and conditions acceptance */}

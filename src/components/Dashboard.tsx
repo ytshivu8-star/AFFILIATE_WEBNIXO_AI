@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, DollarSign, MousePointerClick, 
-  Copy, Check, ArrowUpRight, Award, ChevronRight, Clock, ShieldAlert, CheckCircle2, AlertCircle, Info, Sparkles, Ticket, Edit3
+  Copy, Check, ArrowUpRight, Award, ChevronRight, Clock, ShieldAlert, CheckCircle2, AlertCircle, Info, Sparkles, Ticket, Edit3, Link2
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AffiliateStats, ReferralEvent, UserProfile } from '../types';
@@ -13,15 +13,35 @@ interface DashboardProps {
   events: ReferralEvent[];
   chartData: any[];
   onUpdateUser: (data: Partial<UserProfile>) => void;
+  onNavigate?: (route: string) => void;
 }
 
-export default function Dashboard({ user, stats, events, chartData, onUpdateUser }: DashboardProps) {
+export default function Dashboard({ user, stats, events, chartData, onUpdateUser, onNavigate }: DashboardProps) {
   const [copied, setCopied] = useState(false);
   const [copiedCoupon, setCopiedCoupon] = useState(false);
   const [customCouponInput, setCustomCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState(false);
   const [isEditingCoupon, setIsEditingCoupon] = useState(false);
+  const [copiedRoute, setCopiedRoute] = useState<string | null>(null);
+
+  const routesList = [
+    { name: 'Dashboard Home', path: '/dashboard', key: 'dashboard', description: 'Real-time partner performance, clicks & commissions' },
+    { name: 'Marketing Assets', path: '/resources', key: 'resources', description: 'Affiliate promotion graphics & custom coupon utilities' },
+    { name: 'Payouts & Withdrawals', path: '/payouts', key: 'payout', description: 'Withdraw earnings, view pending and completed transactions' },
+    { name: 'Leaderboard Rankings', path: '/leaderboard', key: 'leaderboard', description: 'Compare referral milestones against active partners' },
+    { name: 'Partner Profile', path: '/profile', key: 'profile', description: 'Update full name, website, and UPI payout configurations' },
+    { name: 'Terms of Service', path: '/terms', key: 'terms', description: 'Webnixo program compliance, cookies, and referral rules' },
+    { name: 'Admin Operations', path: '/admin', key: 'admin', description: 'Webnixo administrative portal for approving payouts & partners' },
+    { name: 'Login Screen', path: '/login', key: 'login', description: 'Secure 2FA affiliate portal login' },
+    { name: 'Registration Screen', path: '/signup', key: 'signup', description: 'New affiliate onboarding & application form' }
+  ];
+
+  const handleCopyRoute = (path: string) => {
+    navigator.clipboard.writeText(`https://affiliate.webnixo.in${path}`);
+    setCopiedRoute(path);
+    setTimeout(() => setCopiedRoute(null), 2000);
+  };
 
   const referralLink = `${window.location.origin}/ref?code=${user.referralCode || 'webnixo_ai_partner'}`;
 
@@ -306,6 +326,61 @@ export default function Dashboard({ user, stats, events, chartData, onUpdateUser
               </div>
             </form>
           )}
+        </div>
+      </div>
+
+      {/* Dynamic SPA Routing Reference Card */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+        <div>
+          <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
+            <Link2 className="h-4.5 w-4.5 text-indigo-600" />
+            Simulated Custom Domain Routing (affiliate.webnixo.in)
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Webnixo implements dynamic dynamic routing. Below are the registered routes on <code className="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 font-mono text-[11px]">affiliate.webnixo.in</code>. 
+            Click any route below to instantly test client-side SPA state transition and update the active screen.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {routesList.map((route) => (
+            <div 
+              key={route.path} 
+              className="group p-3.5 bg-slate-50 hover:bg-indigo-50/20 border border-slate-200/60 hover:border-indigo-100 rounded-xl transition-all flex flex-col justify-between space-y-2.5"
+            >
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 text-xs">{route.name}</span>
+                  <button
+                    onClick={() => handleCopyRoute(route.path)}
+                    className="p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                    title="Copy Route URL"
+                  >
+                    {copiedRoute === route.path ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5">{route.description}</p>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="font-mono text-[10px] text-indigo-600 bg-indigo-50/80 px-2 py-0.5 rounded-md font-bold">
+                  {route.path}
+                </span>
+                {onNavigate && (
+                  <button
+                    onClick={() => onNavigate(route.key)}
+                    className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-wider group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                  >
+                    Route &rarr;
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

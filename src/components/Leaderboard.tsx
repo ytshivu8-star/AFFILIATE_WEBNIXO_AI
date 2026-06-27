@@ -137,47 +137,53 @@ export default function Leaderboard({
         </div>
 
         <div className="divide-y divide-slate-100">
-          {remainingList.map((entry) => (
-            <div 
-              key={entry.rank} 
-              className={`px-5 py-3.5 flex items-center justify-between transition-colors ${
-                entry.isCurrentUser 
-                ? 'bg-indigo-50/40 hover:bg-indigo-50/60 font-semibold border-l-4 border-indigo-600' 
-                : 'hover:bg-slate-50/50'
-              }`}
-            >
-              <div className="flex items-center gap-4">
-                <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-lg ${
+          {remainingList.length > 0 ? (
+            remainingList.map((entry) => (
+              <div 
+                key={entry.rank} 
+                className={`px-5 py-3.5 flex items-center justify-between transition-colors ${
                   entry.isCurrentUser 
-                  ? 'bg-indigo-600 text-white' 
-                  : 'text-slate-400 bg-slate-100'
-                }`}>
-                  {entry.rank}
-                </span>
-                <div>
-                  <span className={`text-xs text-slate-800 ${entry.isCurrentUser ? 'font-bold' : 'font-medium'}`}>
-                    {entry.name}
+                  ? 'bg-indigo-50/40 hover:bg-indigo-50/60 font-semibold border-l-4 border-indigo-600' 
+                  : 'hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm font-bold w-6 h-6 flex items-center justify-center rounded-lg ${
+                    entry.isCurrentUser 
+                    ? 'bg-indigo-600 text-white' 
+                    : 'text-slate-400 bg-slate-100'
+                  }`}>
+                    {entry.rank}
                   </span>
-                  {entry.isCurrentUser && (
-                    <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">
-                      You
+                  <div>
+                    <span className={`text-xs text-slate-800 ${entry.isCurrentUser ? 'font-bold' : 'font-medium'}`}>
+                      {entry.name}
                     </span>
-                  )}
+                    {entry.isCurrentUser && (
+                      <span className="ml-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold">
+                        You
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-8 font-mono text-xs">
-                <div className="text-right">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Sales</span>
-                  <span className="font-extrabold text-slate-800">{entry.sales}</span>
-                </div>
-                <div className="text-right w-24">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Commissions</span>
-                  <span className="font-extrabold text-slate-800">₹{entry.commission.toFixed(2)}</span>
+                <div className="flex items-center gap-8 font-mono text-xs">
+                  <div className="text-right">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Sales</span>
+                    <span className="font-extrabold text-slate-800">{entry.sales}</span>
+                  </div>
+                  <div className="text-right w-24">
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Commissions</span>
+                    <span className="font-extrabold text-slate-800">₹{entry.commission.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="px-5 py-8 text-center text-xs text-slate-400 font-medium">
+              No other active partners in rankings 4-10 yet. Refer premium users to climb!
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>

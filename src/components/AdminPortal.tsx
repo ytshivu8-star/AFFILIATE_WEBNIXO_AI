@@ -100,98 +100,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     if (storedUsers) {
       affiliatesList = JSON.parse(storedUsers);
     } else {
-      // Create initial rich mock database of users
-      affiliatesList = [
-        {
-          id: 'user_1',
-          email: 'aravind.s@gmail.com',
-          password: 'aravind_pass123',
-          fullName: 'Aravind S',
-          companyName: 'TechVibe Creative',
-          website: 'techvibe.in',
-          promoStrategy: 'Tech Blog Reviews & YouTube videos',
-          country: 'India',
-          referralCode: 'aravind_tech',
-          customCouponCode: 'ARAVIND20',
-          sales: 18,
-          commissionEarned: 3500.00,
-          unpaidCommission: 1250.00,
-          payoutMethod: 'upi',
-          payoutDetails: 'aravind@okaxis',
-          status: 'Active'
-        },
-        {
-          id: 'user_2',
-          email: 'priya.patel@outlook.com',
-          password: 'priya_secure987',
-          fullName: 'Priya Patel',
-          companyName: 'GrowScale Digital',
-          website: 'growscaledigital.com',
-          promoStrategy: 'Weekly SaaS newsletters & LinkedIn posts',
-          country: 'India',
-          referralCode: 'priya_growth',
-          customCouponCode: 'PRIYA20',
-          sales: 14,
-          commissionEarned: 2800.00,
-          unpaidCommission: 2400.00,
-          payoutMethod: 'bank',
-          payoutDetails: 'HDFC Bank (A/C: 9812739102, IFSC: HDFC0000123)',
-          status: 'Active'
-        },
-        {
-          id: 'user_3',
-          email: 'rahul.sharma@gmail.com',
-          password: 'rahul_sharma321',
-          fullName: 'Rahul Sharma',
-          companyName: 'Sharma & Sons Media',
-          website: 'sharmamedia.co',
-          promoStrategy: 'PPC search campaigns & niche blogs',
-          country: 'India',
-          referralCode: 'rahul_media',
-          customCouponCode: 'RAHUL20',
-          sales: 8,
-          commissionEarned: 1600.00,
-          unpaidCommission: 0.00,
-          payoutMethod: 'upi',
-          payoutDetails: 'sharma@paytm',
-          status: 'Active'
-        },
-        {
-          id: 'user_4',
-          email: 'info@techvantage.ai',
-          password: 'vantage_secure456',
-          fullName: 'TechVantage AI',
-          companyName: 'TechVantage Labs',
-          website: 'techvantage.ai',
-          promoStrategy: 'Podcast sponsorships & community recommendations',
-          country: 'India',
-          referralCode: 'vantage_ai',
-          customCouponCode: 'VANTAGE10',
-          sales: 24,
-          commissionEarned: 4800.00,
-          unpaidCommission: 800.00,
-          payoutMethod: 'bank',
-          payoutDetails: 'ICICI Bank (A/C: 1122334455, IFSC: ICIC0000102)',
-          status: 'Active'
-        },
-        {
-          id: 'user_5',
-          email: 'deepak.v@designcraft.io',
-          password: 'deepak_craft654',
-          fullName: 'Deepak Verma',
-          companyName: 'DesignCraft Studio',
-          website: 'designcraft.io',
-          promoStrategy: 'Recommended to direct web clients',
-          country: 'India',
-          referralCode: 'deepak_craft',
-          sales: 1,
-          commissionEarned: 99.80,
-          unpaidCommission: 99.80,
-          payoutMethod: 'upi',
-          payoutDetails: 'deepakv@ybl',
-          status: 'Suspended'
-        }
-      ];
+      // Create initial empty database of users (purely genuine)
+      affiliatesList = [];
       localStorage.setItem('webnixo_global_users', JSON.stringify(affiliatesList));
     }
 
@@ -283,43 +193,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     if (storedPayouts) {
       payoutsList = JSON.parse(storedPayouts);
     } else {
-      // Create rich mock payout history
-      payoutsList = [
-        {
-          id: 'pay_mock_1',
-          amount: 4500.00,
-          date: '25 Jun 2026',
-          method: 'upi',
-          destination: 'aravind@okaxis',
-          status: 'Pending'
-        },
-        {
-          id: 'pay_mock_2',
-          amount: 12500.00,
-          date: '24 Jun 2026',
-          method: 'bank',
-          destination: 'HDFC Bank (A/C: *8912)',
-          status: 'Pending'
-        },
-        {
-          id: 'pay_mock_3',
-          amount: 3200.00,
-          date: '15 Jun 2026',
-          method: 'upi',
-          destination: 'sharma@paytm',
-          status: 'Credited',
-          transactionId: 'TXN7710291039'
-        },
-        {
-          id: 'pay_mock_4',
-          amount: 18000.00,
-          date: '10 Jun 2026',
-          method: 'bank',
-          destination: 'ICICI Bank (A/C: *4455)',
-          status: 'Credited',
-          transactionId: 'TXN5512839102'
-        }
-      ];
+      // Create empty genuine payout history
+      payoutsList = [];
       localStorage.setItem('webnixo_global_payouts', JSON.stringify(payoutsList));
     }
 
