@@ -157,8 +157,18 @@ app.post("/api/send-otp", async (req, res) => {
       let parsedError = errText;
       try {
         const jsonErr = JSON.parse(errText);
-        if (jsonErr && jsonErr.message) {
-          parsedError = jsonErr.message;
+        if (jsonErr) {
+          if (jsonErr.message) {
+            parsedError = jsonErr.message;
+          } else if (jsonErr.error && typeof jsonErr.error === 'object' && jsonErr.error.message) {
+            parsedError = jsonErr.error.message;
+          } else if (jsonErr.error && typeof jsonErr.error === 'string') {
+            parsedError = jsonErr.error;
+          } else if (jsonErr.description) {
+            parsedError = jsonErr.description;
+          } else if (jsonErr.name) {
+            parsedError = `${jsonErr.name}${jsonErr.message ? ': ' + jsonErr.message : ''}`;
+          }
         }
       } catch (e) {
         // Fallback to raw response text if not valid JSON
