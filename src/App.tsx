@@ -321,6 +321,86 @@ export default function App() {
 
   // Load state from localStorage on mount
   useEffect(() => {
+    // Purge any stale mock/fake data from local storage to ensure 100% genuine user experience
+    try {
+      // 1. Detect mock users in global list
+      const globalUsersStr = localStorage.getItem('webnixo_global_users');
+      if (globalUsersStr) {
+        const parsedUsers = JSON.parse(globalUsersStr);
+        if (Array.isArray(parsedUsers)) {
+          const genuineUsers = parsedUsers.filter((u: any) => 
+            u && 
+            u.id !== 'user_1' && 
+            u.id !== 'user_2' && 
+            u.id !== 'user_3' && 
+            u.id !== 'user_4' && 
+            u.id !== 'user_5' && 
+            u.email !== 'aravind.s@gmail.com' && 
+            u.email !== 'priya.patel@outlook.com' && 
+            u.email !== 'rahul.sharma@gmail.com' && 
+            u.email !== 'info@techvantage.ai' && 
+            u.email !== 'deepak.v@designcraft.io'
+          );
+          if (genuineUsers.length !== parsedUsers.length) {
+            localStorage.setItem('webnixo_global_users', JSON.stringify(genuineUsers));
+          }
+        }
+      }
+
+      // 2. Detect mock payouts in global list
+      const globalPayoutsStr = localStorage.getItem('webnixo_global_payouts');
+      if (globalPayoutsStr) {
+        const parsedPayouts = JSON.parse(globalPayoutsStr);
+        if (Array.isArray(parsedPayouts)) {
+          const genuinePayouts = parsedPayouts.filter((p: any) => 
+            p && 
+            !p.id?.startsWith('pay_mock') && 
+            p.destination !== 'aravind@okaxis' && 
+            p.destination !== 'sharma@paytm' && 
+            !p.destination?.includes('HDFC Bank (A/C: *8912)') && 
+            !p.destination?.includes('ICICI Bank (A/C: *4455)')
+          );
+          if (genuinePayouts.length !== parsedPayouts.length) {
+            localStorage.setItem('webnixo_global_payouts', JSON.stringify(genuinePayouts));
+          }
+        }
+      }
+
+      // 3. Detect mock affiliate stats
+      const cachedStats = localStorage.getItem('wwebnixo_affiliate_stats');
+      if (cachedStats) {
+        const parsedStats = JSON.parse(cachedStats);
+        if (parsedStats && (parsedStats.clicks === 184 || parsedStats.signups === 32 || parsedStats.unpaidCommission === 1135.40)) {
+          localStorage.removeItem('wwebnixo_affiliate_stats');
+        }
+      }
+
+      // 4. Detect mock affiliate payout history
+      const cachedHistory = localStorage.getItem('wwebnixo_affiliate_payout_history');
+      if (cachedHistory) {
+        const parsedHistory = JSON.parse(cachedHistory);
+        if (Array.isArray(parsedHistory)) {
+          const genuineHistory = parsedHistory.filter((p: any) => 
+            p && 
+            p.id !== 'pay_1' && 
+            p.id !== 'pay_2' && 
+            p.destination !== 'shivu@okaxis'
+          );
+          if (genuineHistory.length !== parsedHistory.length) {
+            localStorage.setItem('wwebnixo_affiliate_payout_history', JSON.stringify(genuineHistory));
+          }
+        }
+      }
+
+      // 5. Detect mock events
+      const cachedEvents = localStorage.getItem('wwebnixo_affiliate_events');
+      if (cachedEvents && (cachedEvents.includes('Enterprise Tier Plan') || cachedEvents.includes('arun_dev') || cachedEvents.includes('Starter Tier Plan'))) {
+        localStorage.removeItem('wwebnixo_affiliate_events');
+      }
+    } catch (err) {
+      console.error("Error purging stale mock data", err);
+    }
+
     // Migration: If old Google Drive layout is in localStorage or references the original file ID, migrate to the highly compatible direct usercontent layout
     let storedUrl = localStorage.getItem('webnixo_marketing_logoUrl');
     if (!storedUrl || storedUrl.includes('docs.google.com') || storedUrl.includes('11yuTE40NZx1imt0DARVHUfIPTrgtrJA6')) {

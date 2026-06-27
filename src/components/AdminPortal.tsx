@@ -98,7 +98,28 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     let affiliatesList: GlobalAffiliate[] = [];
     
     if (storedUsers) {
-      affiliatesList = JSON.parse(storedUsers);
+      try {
+        const parsed = JSON.parse(storedUsers);
+        if (Array.isArray(parsed)) {
+          affiliatesList = parsed.filter((u: any) => {
+            const email = (u.email || '').toLowerCase().trim();
+            return (
+              u.id !== 'user_1' &&
+              u.id !== 'user_2' &&
+              u.id !== 'user_3' &&
+              u.id !== 'user_4' &&
+              u.id !== 'user_5' &&
+              email !== 'aravind.s@gmail.com' &&
+              email !== 'priya.patel@outlook.com' &&
+              email !== 'rahul.sharma@gmail.com' &&
+              email !== 'info@techvantage.ai' &&
+              email !== 'deepak.v@designcraft.io'
+            );
+          });
+        }
+      } catch (e) {
+        affiliatesList = [];
+      }
     } else {
       // Create initial empty database of users (purely genuine)
       affiliatesList = [];
@@ -191,7 +212,26 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     let payoutsList: PayoutHistoryItem[] = [];
     
     if (storedPayouts) {
-      payoutsList = JSON.parse(storedPayouts);
+      try {
+        const parsed = JSON.parse(storedPayouts);
+        if (Array.isArray(parsed)) {
+          payoutsList = parsed.filter((p: any) => {
+            const dest = (p.destination || '').toLowerCase();
+            return (
+              p.id !== 'pay_1' &&
+              p.id !== 'pay_2' &&
+              !p.id?.startsWith('pay_mock') &&
+              !dest.includes('aravind@okaxis') &&
+              !dest.includes('sharma@paytm') &&
+              !dest.includes('shivu@okaxis') &&
+              !dest.includes('hdfc bank') &&
+              !dest.includes('icici bank')
+            );
+          });
+        }
+      } catch (e) {
+        payoutsList = [];
+      }
     } else {
       // Create empty genuine payout history
       payoutsList = [];
@@ -292,6 +332,21 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             const combined = [...prev];
             remoteProfiles.forEach(remote => {
               if (remote.email === 'shiva@webnixo.in') return;
+              
+              const email = (remote.email || '').toLowerCase().trim();
+              if (
+                remote.id === 'user_1' ||
+                remote.id === 'user_2' ||
+                remote.id === 'user_3' ||
+                remote.id === 'user_4' ||
+                remote.id === 'user_5' ||
+                email === 'aravind.s@gmail.com' ||
+                email === 'priya.patel@outlook.com' ||
+                email === 'rahul.sharma@gmail.com' ||
+                email === 'info@techvantage.ai' ||
+                email === 'deepak.v@designcraft.io'
+              ) return; // Skip mock profile
+              
               const idx = combined.findIndex(u => u.email === remote.email);
               const mappedAffiliate: GlobalAffiliate = {
                 id: remote.id,
@@ -328,6 +383,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
           setGlobalPayouts(prev => {
             const combined = [...prev];
             remotePayouts.forEach(remote => {
+              const dest = (remote.destination || '').toLowerCase();
+              if (
+                remote.id === 'pay_1' ||
+                remote.id === 'pay_2' ||
+                remote.id?.startsWith('pay_mock') ||
+                dest.includes('aravind@okaxis') ||
+                dest.includes('sharma@paytm') ||
+                dest.includes('shivu@okaxis') ||
+                dest.includes('hdfc bank') ||
+                dest.includes('icici bank')
+              ) return; // Skip mock payout
+
               const idx = combined.findIndex(p => p.id === remote.id);
               const mappedPayout: PayoutHistoryItem = {
                 id: remote.id,

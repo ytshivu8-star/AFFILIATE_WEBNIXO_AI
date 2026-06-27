@@ -188,8 +188,9 @@ async function init() {
     console.log("Starting development mode with Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "spa",
+      appType: "custom",
     });
+
     app.use(vite.middlewares);
 
     // Dynamic catch-all router for SPA page refreshes in development mode
