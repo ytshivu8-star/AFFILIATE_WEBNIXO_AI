@@ -132,6 +132,16 @@ export default function App() {
     { rank: 9, name: 'Nikhil_K', sales: 2, commission: 60.00 },
   ]);
 
+  // Resend diagnostic configuration status
+  const [resendStatus, setResendStatus] = useState<{ isCustomKey: boolean; maskedKey: string; fromEmail: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/resend-status')
+      .then(res => res.json())
+      .then(data => setResendStatus(data))
+      .catch(err => console.warn("Error fetching Resend status:", err));
+  }, []);
+
   // Timer for OTP resend cooldown
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -177,7 +187,8 @@ export default function App() {
           setOtpStatusMsg("Simulated secure delivery activated. OTP generated successfully.");
         } else {
           console.warn("Resend API failed, falling back to simulated secure in-app delivery:", res.error);
-          setOtpStatusMsg("API fallback delivery activated. OTP generated successfully.");
+          setOtpError(`Resend API Error: ${res.error || "Unknown error occurred"}`);
+          setOtpStatusMsg("API error fallback activated. Live simulation code generated below.");
         }
         setBackupOtpDelivery({
           visible: true,
@@ -1179,6 +1190,23 @@ export default function App() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 tracking-tight">WEBNIXO AI Affiliate Partner</h2>
                 <p className="text-xs text-slate-500 mt-1">Sign in to launch, manage, and scale your passive referral commissions.</p>
+                {resendStatus && (
+                  <div className={`mt-2.5 p-2 rounded-lg text-[10px] flex items-center justify-between font-medium border ${
+                    resendStatus.isCustomKey 
+                      ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
+                      : "bg-amber-50/50 border-amber-100 text-amber-800"
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${resendStatus.isCustomKey ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
+                      <span>
+                        {resendStatus.isCustomKey 
+                          ? `Custom Resend Key: ${resendStatus.maskedKey}` 
+                          : "Demo Key Active (Custom logs won't capture emails)"}
+                      </span>
+                    </div>
+                    <span className="opacity-80 font-mono">From: {resendStatus.fromEmail.replace(/.*<(.+)>/, "$1")}</span>
+                  </div>
+                )}
               </div>
             </div>
 

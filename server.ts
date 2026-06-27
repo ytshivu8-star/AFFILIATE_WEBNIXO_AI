@@ -12,6 +12,42 @@ const PORT = 3000;
 // Middleware for parsing JSON requests
 app.use(express.json());
 
+// API: Check Resend connection and configuration status
+app.get("/api/resend-status", (req, res) => {
+  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+  rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
+
+  let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
+  rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
+
+  const isCustomKey = rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj" && rawApiKey.length > 10;
+  
+  let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
+  if (rawFromEmail) {
+    fromEmail = rawFromEmail;
+  } else if (isCustomKey) {
+    fromEmail = "WEBNIXO AI <no-reply@auth.webnixo.in>";
+  }
+
+  // Mask the API Key for security: re_abcd...wxyz
+  let maskedKey = "None";
+  if (isCustomKey) {
+    if (rawApiKey.length > 8) {
+      maskedKey = `${rawApiKey.substring(0, 5)}...${rawApiKey.substring(rawApiKey.length - 4)}`;
+    } else {
+      maskedKey = "Custom key (too short)";
+    }
+  } else {
+    maskedKey = "Default demo key";
+  }
+
+  res.json({
+    isCustomKey,
+    maskedKey,
+    fromEmail,
+  });
+});
+
 // API: Send OTP email proxy route (Server-side bypasses browser CORS and secures the API Key)
 app.post("/api/send-otp", async (req, res) => {
   try {
@@ -21,14 +57,17 @@ app.post("/api/send-otp", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields (toEmail, otpCode, purpose)" });
     }
 
-    const apiKey = process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj";
-    const fromEmailOverride = process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL;
+    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+    rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
+
+    let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
+    rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
     // Determine the sender email
     let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
-    if (fromEmailOverride) {
-      fromEmail = fromEmailOverride;
-    } else if (apiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj") {
+    if (rawFromEmail) {
+      fromEmail = rawFromEmail;
+    } else if (rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj") {
       // If they provided their own key and haven't explicitly set a custom from email,
       // default to their verified domain auth.webnixo.in!
       fromEmail = "WEBNIXO AI <no-reply@auth.webnixo.in>";
@@ -78,7 +117,7 @@ app.post("/api/send-otp", async (req, res) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${rawApiKey}`,
       },
       body: JSON.stringify({
         from: fromEmail,
