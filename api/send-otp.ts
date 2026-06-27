@@ -81,14 +81,14 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
           <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello,</p>
           <p style="font-size: 15px; line-height: 1.6; color: #334155;">
-            \${purpose === 'register' 
+            ${purpose === 'register' 
               ? 'Thank you for registering to join the WEBNIXO AI Affiliate Partner network. To complete your account verification, please use the 6-digit verification code below:' 
               : 'We received a request to reset the password for your WEBNIXO AI Affiliate Partner account. Use the 6-digit security code below to set a new password:'}
           </p>
           
           <div style="text-align: center; margin: 30px 0;">
             <div style="display: inline-block; background-color: #f5f3ff; border: 2px dashed #818cf8; border-radius: 12px; padding: 15px 35px; font-size: 32px; font-weight: 800; letter-spacing: 5px; color: #4f46e5;">
-              \${otpCode}
+              ${otpCode}
             </div>
             <p style="font-size: 11px; color: #94a3b8; margin-top: 10px;">This security code is valid for the next 10 minutes.</p>
           </div>
@@ -110,7 +110,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer \${rawApiKey}`,
+          "Authorization": `Bearer ${rawApiKey}`,
         },
         body: JSON.stringify({
           from: fromAddress,
@@ -158,7 +158,7 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
           } else if (jsonErr.description) {
             parsedError = jsonErr.description;
           } else if (jsonErr.name) {
-            parsedError = `\${jsonErr.name}\${jsonErr.message ? ': ' + jsonErr.message : ''}`;
+            parsedError = `${jsonErr.name}${jsonErr.message ? ': ' + jsonErr.message : ''}`;
           }
         }
       } catch (e) {
