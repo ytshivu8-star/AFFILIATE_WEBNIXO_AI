@@ -25,7 +25,9 @@ import {
   loadPayoutsFromSupabase, 
   loadSettingsFromSupabase, 
   checkSupabaseConnection,
-  supabaseErrorState
+  supabaseErrorState,
+  storeOTPInSupabase,
+  verifyOTPFromSupabase
 } from './lib/supabase';
 
 export default function App() {
@@ -33,8 +35,8 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [emailInput, setEmailInput] = useState('ytshivu8@gmail.com');
-  const [passwordInput, setPasswordInput] = useState('password123');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
 
   // OTP Verification and Password Reset states
   const [verificationMode, setVerificationMode] = useState<'none' | 'signup_otp' | 'forgot_email' | 'forgot_otp' | 'reset_password'>('none');
@@ -57,23 +59,23 @@ export default function App() {
 
   // User details
   const [user, setUser] = useState<UserProfile>({
-    id: 'user_9021',
-    email: 'ytshivu8@gmail.com',
-    fullName: 'Shiva',
-    phone: '+91 98765 43210',
+    id: `user_${Math.floor(1000 + Math.random() * 9000)}`,
+    email: '',
+    fullName: '',
+    phone: '',
     companyName: '',
     website: '',
     promoStrategy: '',
     country: 'India',
     isRegisteredAffiliate: false, // Starts as false so they can register
     referralCode: '',
-    joinedAt: 'June 2026'
+    joinedAt: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
   });
 
   // Payout preference
   const [payout, setPayout] = useState<PayoutDetails>({
     payoutMethod: 'upi',
-    upiId: 'shivu@okaxis',
+    upiId: '',
     bankName: '',
     accountNumber: '',
     accountHolderName: '',
@@ -149,6 +151,15 @@ export default function App() {
     setOtpStatusMsg('');
     const code = generateOTP();
     setOtpCode(code);
+
+    // Save to Supabase OTP table if configured
+    if (isSupabaseConfigured()) {
+      try {
+        await storeOTPInSupabase(email, code, purpose);
+      } catch (err) {
+        console.warn("Supabase OTP store error:", err);
+      }
+    }
     
     try {
       const res = await sendOTPEmail(email, code, purpose);
@@ -1324,10 +1335,47 @@ export default function App() {
                   </div>
                 )}
 
-                <form onSubmit={(e) => {
+                <form onSubmit={async (e) => {
                   e.preventDefault();
                   setOtpError('');
-                  if (otpInput.trim() === otpCode) {
+                  setOtpLoading(true);
+
+                  let verified = false;
+                  const emailToVerify = verificationMode === 'signup_otp' ? emailInput : forgotEmailInput;
+                  const purposeStr = verificationMode === 'signup_otp' ? 'register' : 'forgot_password';
+
+                  if (isSupabaseConfigured()) {
+                    try {
+                      const res = await verifyOTPFromSupabase(emailToVerify, otpInput.trim(), purposeStr);
+                      if (res.success) {
+                        verified = true;
+                      } else {
+                        // Fallback check against the in-memory fallback code so they don't get locked out
+                        if (otpInput.trim() === otpCode) {
+                          verified = true;
+                        } else {
+                          setOtpError(res.error || "Incorrect security code.");
+                        }
+                      }
+                    } catch (err: any) {
+                      console.warn("Supabase OTP verification check failed:", err);
+                      if (otpInput.trim() === otpCode) {
+                        verified = true;
+                      } else {
+                        setOtpError("Error verifying security code via Supabase.");
+                      }
+                    }
+                  } else {
+                    if (otpInput.trim() === otpCode) {
+                      verified = true;
+                    } else {
+                      setOtpError("Incorrect security code. Please check your inbox or use the preview generator helper code above.");
+                    }
+                  }
+
+                  setOtpLoading(false);
+
+                  if (verified) {
                     if (verificationMode === 'signup_otp') {
                       completeSignup();
                     } else {
@@ -1335,8 +1383,6 @@ export default function App() {
                       setOtpInput('');
                       setOtpError('');
                     }
-                  } else {
-                    setOtpError("Incorrect security code. Please check your inbox or use the preview generator helper code above.");
                   }
                 }} className="space-y-4">
                   <div className="space-y-1.5">

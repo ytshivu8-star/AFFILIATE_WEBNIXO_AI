@@ -179,6 +179,23 @@ DROP POLICY IF EXISTS "Public full access to settings" ON public.webnixo_setting
 CREATE POLICY "Public full access to settings" ON public.webnixo_settings_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
+-- 5. Create OTP Affiliate Table (webnixo_otps_affilate)
+CREATE TABLE IF NOT EXISTS public.webnixo_otps_affilate (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    otp_code TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    verified BOOLEAN DEFAULT false,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- Enable RLS and setup policies safely
+ALTER TABLE public.webnixo_otps_affilate ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public full access to otps" ON public.webnixo_otps_affilate;
+CREATE POLICY "Public full access to otps" ON public.webnixo_otps_affilate FOR ALL USING (true) WITH CHECK (true);
+
+
 -- ==========================================
 -- SECTION 3: SEED DEFAULT DATA
 -- ==========================================
@@ -514,5 +531,79 @@ export const loadAllPayoutsFromSupabase = async (): Promise<any[] | null> => {
   } catch (err) {
     console.warn("Supabase load all payouts error:", err);
     return null;
+  }
+};
+
+export const storeOTPInSupabase = async (
+  email: string,
+  otpCode: string,
+  purpose: string
+): Promise<boolean> => {
+  if (!supabase) return false;
+  try {
+    const id = Math.random().toString(36).substring(2, 15);
+    // OTP expires in 10 minutes (using current UTC timestamp)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    
+    const { error } = await supabase.from('webnixo_otps_affilate').insert({
+      id,
+      email: email.toLowerCase().trim(),
+      otp_code: otpCode,
+      purpose,
+      verified: false,
+      expires_at: expiresAt
+    });
+
+    if (error) {
+      console.warn("Error storing OTP in Supabase:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err: any) {
+    console.warn("storeOTPInSupabase exception:", err.message);
+    return false;
+  }
+};
+
+export const verifyOTPFromSupabase = async (
+  email: string,
+  otpCode: string,
+  purpose: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: "Supabase client not initialized" };
+  try {
+    const cleanEmail = email.toLowerCase().trim();
+    const { data, error } = await supabase
+      .from('webnixo_otps_affilate')
+      .select('*')
+      .eq('email', cleanEmail)
+      .eq('otp_code', otpCode)
+      .eq('purpose', purpose)
+      .eq('verified', false)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    if (!data || data.length === 0) {
+      return { success: false, error: "Incorrect security code." };
+    }
+
+    const otpRecord = data[0];
+    const isExpired = new Date(otpRecord.expires_at).getTime() < Date.now();
+    if (isExpired) {
+      return { success: false, error: "This security code has expired." };
+    }
+
+    // Mark as verified
+    await supabase
+      .from('webnixo_otps_affilate')
+      .update({ verified: true })
+      .eq('id', otpRecord.id);
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "OTP verification exception" };
   }
 };
