@@ -1,0 +1,6 @@
+{
+  "name": "WEBNIXO AI Affiliate Portal",
+  "description": "A comprehensive affiliate management dashboard for WEBNIXO AI, featuring sign-in, affiliate registration, tracking metrics, marketing resources, leaderboards, payout details, and profile settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
