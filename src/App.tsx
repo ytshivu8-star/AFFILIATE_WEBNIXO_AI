@@ -84,39 +84,30 @@ export default function App() {
 
   // Performance stats
   const [stats, setStats] = useState<AffiliateStats>({
-    clicks: 184,
-    signups: 32,
-    sales: 4,
-    commissionEarned: 114.60,
-    unpaidCommission: 1135.40, // Ensure it is above the 1000 threshold so they can test Payout out-of-the-box!
-    payoutStatus: 'Pending'
+    clicks: 0,
+    signups: 0,
+    sales: 0,
+    commissionEarned: 0.00,
+    unpaidCommission: 0.00,
+    payoutStatus: 'None'
   });
 
   // Payout history
-  const [payoutHistory, setPayoutHistory] = useState<PayoutHistoryItem[]>([
-    { id: 'pay_1', amount: 1200.00, date: '01 Jun 2026', method: 'upi', destination: 'shivu@okaxis', status: 'Credited', transactionId: 'TXN91028301928' },
-    { id: 'pay_2', amount: 800.00, date: '01 May 2026', method: 'upi', destination: 'shivu@okaxis', status: 'Credited', transactionId: 'TXN89128392102' }
-  ]);
+  const [payoutHistory, setPayoutHistory] = useState<PayoutHistoryItem[]>([]);
 
   // Daily Chart Trend (last 7 days)
   const [chartData, setChartData] = useState<any[]>([
-    { day: 'Mon', clicks: 20, signups: 3, sales: 0, revenue: 0 },
-    { day: 'Tue', clicks: 28, signups: 5, sales: 1, revenue: 39.80 },
-    { day: 'Wed', clicks: 22, signups: 2, sales: 0, revenue: 0 },
-    { day: 'Thu', clicks: 35, signups: 6, sales: 1, revenue: 99.80 },
-    { day: 'Fri', clicks: 42, signups: 8, sales: 1, revenue: 39.80 },
-    { day: 'Sat', clicks: 17, signups: 4, sales: 0, revenue: 0 },
-    { day: 'Sun (Today)', clicks: 20, signups: 4, sales: 1, revenue: 199.80 }
+    { day: 'Mon', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Tue', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Wed', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Thu', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Fri', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Sat', clicks: 0, signups: 0, sales: 0, revenue: 0 },
+    { day: 'Sun (Today)', clicks: 0, signups: 0, sales: 0, revenue: 0 }
   ]);
 
   // Activity stream logs
-  const [events, setEvents] = useState<ReferralEvent[]>([
-    { id: '1', type: 'sale', details: 'Enterprise Tier Plan - Referred sale verified', timestamp: '2 hours ago', commission: 199.80 },
-    { id: '2', type: 'signup', details: 'New User "arun_dev" signed up for free trial', timestamp: '4 hours ago' },
-    { id: '3', type: 'click', details: 'Direct click from LinkedIn post recommendation', timestamp: '5 hours ago' },
-    { id: '4', type: 'sale', details: 'Starter Tier Plan - Referred sale verified', timestamp: '1 day ago', commission: 39.80 },
-    { id: '5', type: 'click', details: 'Direct click from youtube.com/watch?v=webnixo', timestamp: '1 day ago' },
-  ]);
+  const [events, setEvents] = useState<ReferralEvent[]>([]);
 
   // Leaderboard data
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);

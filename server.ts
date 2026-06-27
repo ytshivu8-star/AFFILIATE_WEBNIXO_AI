@@ -191,6 +191,22 @@ async function init() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // Dynamic catch-all router for SPA page refreshes in development mode
+    app.get("*", async (req, res, next) => {
+      if (req.originalUrl.startsWith("/api")) {
+        return next();
+      }
+      try {
+        const fs = await import("fs");
+        const templatePath = path.resolve(process.cwd(), "index.html");
+        let html = fs.readFileSync(templatePath, "utf-8");
+        html = await vite.transformIndexHtml(req.originalUrl, html);
+        res.status(200).set({ "Content-Type": "text/html" }).end(html);
+      } catch (e) {
+        next(e);
+      }
+    });
   } else {
     console.log("Starting production mode serving static dist files...");
     const distPath = path.join(process.cwd(), "dist");
