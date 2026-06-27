@@ -44,8 +44,10 @@ export const sendOTPEmail = async (
       } catch (e) {
         // Not valid JSON
         const trimmedText = responseText.trim();
-        if (trimmedText.startsWith("<!DOCTYPE") || trimmedText.startsWith("<html") || trimmedText.includes("<body")) {
-          errorMessage = `Server routing error (Returned HTML instead of JSON). Make sure your production server (Node.js/Express) is actually running and your reverse proxy (Nginx/Apache) is routing "/api" traffic to it, rather than serving static files.`;
+        if (trimmedText.startsWith("<!DOCTYPE") || trimmedText.startsWith("<html") || trimmedText.includes("<body") || trimmedText.includes("NOT_FOUND")) {
+          errorMessage = `Hosting Routing Error (Vercel returned a 404 NOT_FOUND page). 
+This means your serverless api route is not active or hasn't finished deploying. 
+Please ensure you have set your RESEND_API_KEY and VITE_RESEND_FROM_EMAIL inside your Vercel Project Dashboard under "Settings" -> "Environment Variables", and redeployed your Vercel project to activate the functions.`;
         } else if (trimmedText) {
           errorMessage = trimmedText.substring(0, 150);
         } else {
