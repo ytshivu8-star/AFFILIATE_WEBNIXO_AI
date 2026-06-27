@@ -1191,20 +1191,32 @@ export default function App() {
                 <h2 className="text-xl font-bold text-slate-900 tracking-tight">WEBNIXO AI Affiliate Partner</h2>
                 <p className="text-xs text-slate-500 mt-1">Sign in to launch, manage, and scale your passive referral commissions.</p>
                 {resendStatus && (
-                  <div className={`mt-2.5 p-2 rounded-lg text-[10px] flex items-center justify-between font-medium border ${
-                    resendStatus.isCustomKey 
-                      ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
-                      : "bg-amber-50/50 border-amber-100 text-amber-800"
-                  }`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${resendStatus.isCustomKey ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
-                      <span>
-                        {resendStatus.isCustomKey 
-                          ? `Custom Resend Key: ${resendStatus.maskedKey}` 
-                          : "Demo Key Active (Custom logs won't capture emails)"}
-                      </span>
+                  <div className="mt-2.5 space-y-1.5">
+                    <div className={`p-2 rounded-lg text-[10px] flex items-center justify-between font-medium border ${
+                      resendStatus.isCustomKey 
+                        ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
+                        : "bg-amber-50/50 border-amber-100 text-amber-800"
+                    }`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${resendStatus.isCustomKey ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} />
+                        <span>
+                          {resendStatus.isCustomKey 
+                            ? `Custom Resend Key: ${resendStatus.maskedKey}` 
+                            : "Demo Key Active (Falling back to sandbox)"}
+                        </span>
+                      </div>
+                      <span className="opacity-80 font-mono">From: {resendStatus.fromEmail.replace(/.*<(.+)>/, "$1")}</span>
                     </div>
-                    <span className="opacity-80 font-mono">From: {resendStatus.fromEmail.replace(/.*<(.+)>/, "$1")}</span>
+
+                    {!resendStatus.isCustomKey && (
+                      <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] text-slate-600 leading-relaxed">
+                        <span className="font-semibold text-slate-700 block mb-0.5">How to send from auth.webnixo.in:</span>
+                        1. Go to your <span className="font-semibold text-slate-800">Vercel Project Dashboard</span> &rarr; <span className="font-semibold text-slate-800">Settings</span> &rarr; <span className="font-semibold text-slate-800">Environment Variables</span>.<br />
+                        2. Add <code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded font-mono">RESEND_API_KEY</code> = <span className="text-slate-500 font-mono">your_actual_resend_key</span>.<br />
+                        3. Add <code className="bg-slate-100 text-indigo-700 px-1 py-0.5 rounded font-mono">RESEND_FROM_EMAIL</code> = <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700 font-mono">no-reply@auth.webnixo.in</code>.<br />
+                        4. <span className="font-semibold text-rose-600">IMPORTANT:</span> Go to the Vercel Deployments tab and click <span className="font-semibold text-slate-800">Redeploy</span> to activate these variables!
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
