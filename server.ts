@@ -111,29 +111,60 @@ app.post("/api/send-otp", async (req, res) => {
       </div>
     `;
 
-    console.log(`Sending OTP Email via Resend. From: "${fromEmail}" | To: "${toEmail}" | Purpose: "${purpose}"`);
+    const sendWithFrom = async (fromAddress: string) => {
+      console.log(`Sending OTP Email via Resend. From: "${fromAddress}" | To: "${toEmail}" | Purpose: "${purpose}"`);
+      return await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${rawApiKey}`,
+        },
+        body: JSON.stringify({
+          from: fromAddress,
+          to: [toEmail],
+          subject: subject,
+          html: htmlBody,
+        }),
+      });
+    };
 
-    const resendResponse = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${rawApiKey}`,
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [toEmail],
-        subject: subject,
-        html: htmlBody,
-      }),
-    });
+    let resendResponse = await sendWithFrom(fromEmail);
+
+    // Auto-fallback 1: If 422 validation error and display name was used, strip display name and try raw email
+    if (resendResponse.status === 422 && fromEmail.includes("<")) {
+      const emailMatch = fromEmail.match(/<([^>]+)>/);
+      if (emailMatch && emailMatch[1]) {
+        const rawEmailOnly = emailMatch[1].trim();
+        console.warn(`Resend 422 validation error with display name. Retrying with raw email only: "${rawEmailOnly}"`);
+        resendResponse = await sendWithFrom(rawEmailOnly);
+      }
+    }
+
+    // Auto-fallback 2: If still 422 and we are using a custom domain, try falling back to onboarding@resend.dev sandbox address
+    // just in case they haven't finished verifying the domain in their Resend dashboard
+    if (resendResponse.status === 422 && !fromEmail.includes("onboarding@resend.dev")) {
+      console.warn(`Resend 422 validation error with custom domain. Retrying with onboarding@resend.dev sandbox address`);
+      resendResponse = await sendWithFrom("WEBNIXO AI <onboarding@resend.dev>");
+    }
 
     if (resendResponse.ok) {
       const resData = await resendResponse.json();
       return res.json({ success: true, messageId: resData.id });
     } else {
       const errText = await resendResponse.text();
-      console.error("Resend API returned error:", errText);
-      return res.status(500).json({ success: false, error: errText });
+      console.error("Resend API returned error after all fallback attempts:", errText);
+      
+      let parsedError = errText;
+      try {
+        const jsonErr = JSON.parse(errText);
+        if (jsonErr && jsonErr.message) {
+          parsedError = jsonErr.message;
+        }
+      } catch (e) {
+        // Fallback to raw response text if not valid JSON
+      }
+      
+      return res.status(422).json({ success: false, error: parsedError });
     }
   } catch (err: any) {
     console.error("Error in /api/send-otp endpoint:", err);
