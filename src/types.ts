@@ -67,3 +67,11 @@ export interface ReferralEvent {
   timestamp: string;
   commission?: number;
 }
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  cost: number;
+  period: string;
+  is_active: boolean;
+}

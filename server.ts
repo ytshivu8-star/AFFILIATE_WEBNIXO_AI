@@ -184,7 +184,10 @@ app.post("/api/send-otp", async (req, res) => {
 
 // Setup Vite or Static File serving depending on environment
 async function init() {
-  if (process.env.NODE_ENV !== "production") {
+  // Robust check to force development/Vite mode when running server.ts directly
+  const isDev = process.env.NODE_ENV !== "production" || (typeof import.meta.url === "string" && import.meta.url.endsWith(".ts"));
+
+  if (isDev) {
     console.log("Starting development mode with Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -192,6 +195,14 @@ async function init() {
     });
 
     app.use(vite.middlewares);
+
+    // Logging middleware to trace dev requests and troubleshoot routing
+    app.use((req, res, next) => {
+      if (req.method === "GET" && !req.url.startsWith("/api") && !req.url.includes(".")) {
+        console.log(`[Dev Routing] Catching non-asset GET request for path: ${req.url}`);
+      }
+      next();
+    });
 
     // Dynamic catch-all router for SPA page refreshes in development mode
     app.get("*", async (req, res, next) => {
@@ -205,6 +216,7 @@ async function init() {
         html = await vite.transformIndexHtml(req.originalUrl, html);
         res.status(200).set({ "Content-Type": "text/html" }).end(html);
       } catch (e) {
+        console.error("[Dev Routing Error] Failed to transform/serve index.html:", e);
         next(e);
       }
     });

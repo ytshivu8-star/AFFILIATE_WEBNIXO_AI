@@ -4,7 +4,7 @@ import {
   ArrowUpRight, ShieldAlert, Sparkles, Ban, Check, Sliders, Play, 
   RefreshCw, DollarSign, UserCheck, Trash2, Mail, Phone, Globe, ChevronRight, X, Copy, Database, CheckCircle
 } from 'lucide-react';
-import { UserProfile, PayoutHistoryItem, ReferralEvent, AffiliateStats, PayoutDetails } from '../types';
+import { UserProfile, PayoutHistoryItem, ReferralEvent, AffiliateStats, PayoutDetails, SubscriptionPlan } from '../types';
 import {
   isSupabaseConfigured,
   supabase,
@@ -15,7 +15,9 @@ import {
   syncPayoutsToSupabase,
   getSQLInitializationScript,
   checkSupabaseConnection,
-  supabaseErrorState
+  supabaseErrorState,
+  loadSubscriptionPlansFromSupabase,
+  saveSubscriptionPlanToSupabase
 } from '../lib/supabase';
 
 interface GlobalAffiliate {
@@ -44,13 +46,18 @@ interface AdminPortalProps {
 }
 
 export default function AdminPortal({ onLogout }: AdminPortalProps) {
-  const [activeTab, setActiveTab] = useState<'payouts' | 'partners' | 'coupons' | 'settings'>('payouts');
+  const [activeTab, setActiveTab] = useState<'payouts' | 'partners' | 'coupons' | 'settings' | 'plans'>('payouts');
   
   // Supabase Diagnostics State
   const [supabaseStatus, setSupabaseStatus] = useState<'testing' | 'connected' | 'schema_missing' | 'disconnected'>('testing');
   const [supabaseMsg, setSupabaseMsg] = useState('');
   const [showSqlSetup, setShowSqlSetup] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
+
+  // Subscription Plans State
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editPlanData, setEditPlanData] = useState<Partial<SubscriptionPlan>>({});
   
   // Search & Filter States
   const [payoutSearch, setPayoutSearch] = useState('');
@@ -420,6 +427,25 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         }
       }).catch(err => console.warn("Could not load global payouts from Supabase:", err));
 
+      loadSubscriptionPlansFromSupabase().then(plans => {
+        if (plans && plans.length > 0) {
+          setSubscriptionPlans(plans);
+        } else {
+          // Defaults if empty or fails
+          setSubscriptionPlans([
+            { id: 'free', name: 'Starter Plan', cost: 0, period: 'forever', is_active: true },
+            { id: 'monthly', name: 'Monthly Pass', cost: 49, period: 'mo', is_active: true },
+            { id: 'premium', name: 'Premium Pass', cost: 99, period: 'mo', is_active: true },
+            { id: 'yearly', name: 'Yearly Elite', cost: 499, period: 'yr', is_active: true },
+            { id: 'refill_500', name: '500 Credits', cost: 159, period: 'one-time', is_active: true },
+            { id: 'refill_1500', name: '1500 Credits', cost: 349, period: 'one-time', is_active: true },
+            { id: 'refill_3500', name: '3500 Credits', cost: 599, period: 'one-time', is_active: true },
+            { id: 'refill_8000', name: '8000 Credits', cost: 999, period: 'one-time', is_active: true },
+            { id: 'refill_20000', name: '20000 Credits', cost: 1999, period: 'one-time', is_active: true }
+          ]);
+        }
+      }).catch(err => console.warn("Could not load subscription plans from Supabase:", err));
+
       // Check connection and schema health
       checkSupabaseConnection().then(connected => {
         if (connected) {
@@ -595,6 +621,32 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
     saveGlobalState(updatedAffiliates, updatedPayouts);
     setEditingPayoutId(null);
+  };
+
+  const handleSaveSubscriptionPlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPlanId) return;
+
+    const currentPlan = subscriptionPlans.find(p => p.id === editingPlanId);
+    if (!currentPlan) return;
+
+    const updatedPlan: SubscriptionPlan = {
+      ...currentPlan,
+      ...editPlanData
+    };
+
+    if (isSupabaseConfigured()) {
+      const { success, error } = await saveSubscriptionPlanToSupabase(updatedPlan);
+      if (!success) {
+        alert("Failed to save to database: " + error + "\nMake sure you have run the SQL script in Supabase SQL Editor to create the table and policies.");
+        return; // Stop and don't update local state if database save fails
+      }
+    }
+
+    const updatedPlans = subscriptionPlans.map(p => p.id === editingPlanId ? updatedPlan : p);
+    setSubscriptionPlans(updatedPlans);
+    setEditingPlanId(null);
+    setEditPlanData({});
   };
 
   // Toggle Suspended status
@@ -910,6 +962,17 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             >
               <Sliders className="h-4 w-4" />
               Settings
+            </button>
+            <button
+              onClick={() => setActiveTab('plans')}
+              className={`px-4 py-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                activeTab === 'plans'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900'
+              }`}
+            >
+              <Database className="h-4 w-4" />
+              Subscription Plans
             </button>
           </div>
 
@@ -1684,6 +1747,133 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 Save All Administrative Configurations
               </button>
             </form>
+          </div>
+        )}
+
+        {/* Tab 5: Subscription Plans */}
+        {activeTab === 'plans' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="font-bold text-white text-base">Subscription Plans</h4>
+                <p className="text-xs text-slate-400">Manage the pricing and availability of your SaaS subscription tiers.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+              <div className="overflow-x-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-950/80 sticky top-0 z-10 backdrop-blur-sm border-b border-slate-800">
+                    <tr>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Plan ID</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Name</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Cost (₹)</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Period</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Status</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-medium">
+                    {subscriptionPlans.map((plan) => (
+                      <tr key={plan.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-4">
+                          <span className="font-mono text-slate-300">{plan.id}</span>
+                        </td>
+                        <td className="p-4">
+                          {editingPlanId === plan.id ? (
+                            <input
+                              type="text"
+                              value={editPlanData.name ?? plan.name}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, name: e.target.value })}
+                              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white w-full"
+                            />
+                          ) : (
+                            <span className="text-white font-bold">{plan.name}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {editingPlanId === plan.id ? (
+                            <input
+                              type="number"
+                              value={editPlanData.cost ?? plan.cost}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, cost: Number(e.target.value) })}
+                              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white w-20"
+                            />
+                          ) : (
+                            <span className="text-amber-400 font-bold">₹{plan.cost}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {editingPlanId === plan.id ? (
+                            <input
+                              type="text"
+                              value={editPlanData.period ?? plan.period}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, period: e.target.value })}
+                              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white w-16"
+                            />
+                          ) : (
+                            <span className="text-slate-300">{plan.period}</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          {editingPlanId === plan.id ? (
+                            <select
+                              value={editPlanData.is_active ?? plan.is_active ? 'active' : 'inactive'}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, is_active: e.target.value === 'active' })}
+                              className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white"
+                            >
+                              <option value="active">Active</option>
+                              <option value="inactive">Inactive</option>
+                            </select>
+                          ) : (
+                            plan.is_active ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                                <CheckCircle className="h-3 w-3" /> Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 text-[10px] font-bold border border-slate-500/20">
+                                <Ban className="h-3 w-3" /> Inactive
+                              </span>
+                            )
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          {editingPlanId === plan.id ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={handleSaveSubscriptionPlan}
+                                className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded font-bold transition-colors"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingPlanId(null);
+                                  setEditPlanData({});
+                                }}
+                                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingPlanId(plan.id);
+                                setEditPlanData(plan);
+                              }}
+                              className="px-3 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 rounded transition-colors cursor-pointer"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
