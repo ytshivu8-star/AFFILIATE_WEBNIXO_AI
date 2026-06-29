@@ -436,12 +436,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             { id: 'free', name: 'Starter Plan', cost: 0, period: 'forever', is_active: true },
             { id: 'monthly', name: 'Monthly Pass', cost: 49, period: 'mo', is_active: true },
             { id: 'premium', name: 'Premium Pass', cost: 99, period: 'mo', is_active: true },
-            { id: 'yearly', name: 'Yearly Elite', cost: 499, period: 'yr', is_active: true },
-            { id: 'refill_500', name: '500 Credits', cost: 159, period: 'one-time', is_active: true },
-            { id: 'refill_1500', name: '1500 Credits', cost: 349, period: 'one-time', is_active: true },
-            { id: 'refill_3500', name: '3500 Credits', cost: 599, period: 'one-time', is_active: true },
-            { id: 'refill_8000', name: '8000 Credits', cost: 999, period: 'one-time', is_active: true },
-            { id: 'refill_20000', name: '20000 Credits', cost: 1999, period: 'one-time', is_active: true }
+            { id: 'yearly', name: 'Yearly Elite', cost: 499, period: 'yr', is_active: true }
           ]);
         }
       }).catch(err => console.warn("Could not load subscription plans from Supabase:", err));

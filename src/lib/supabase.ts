@@ -197,7 +197,22 @@ CREATE POLICY "Public full access to otps" ON public.webnixo_otps_affilate FOR A
 
 
 -- ==========================================
--- SECTION 3: SUBSCRIPTION PLANS
+-- SECTION 3: SEED DEFAULT DATA
+-- ==========================================
+
+-- Insert Initial Default Settings for Affiliate System
+INSERT INTO public.webnixo_settings_affilate (key, value) VALUES
+('commission_rate', '20'),
+('min_payout', '1000'),
+('comm_199', '39.80'),
+('comm_499', '99.80'),
+('comm_999', '199.80'),
+('admin_password', '123456')
+ON CONFLICT (key) DO NOTHING;
+
+
+-- ==========================================
+-- SUBSCRIPTION PLANS
 -- ==========================================
 
 CREATE TABLE IF NOT EXISTS public.subscription_plans (
@@ -236,19 +251,60 @@ DROP POLICY IF EXISTS "Public full access to subscription plans" ON public.subsc
 -- Allow anonymous read and write access for admin purposes
 CREATE POLICY "Public full access to subscription plans" ON public.subscription_plans FOR ALL USING (true) WITH CHECK (true);
 
+
 -- ==========================================
--- SECTION 4: SEED DEFAULT DATA
+-- COUPONS & USAGES
 -- ==========================================
 
--- Insert Initial Default Settings for Affiliate System
-INSERT INTO public.webnixo_settings_affilate (key, value) VALUES
-('commission_rate', '20'),
-('min_payout', '1000'),
-('comm_199', '39.80'),
-('comm_499', '99.80'),
-('comm_999', '199.80'),
-('admin_password', '123456')
-ON CONFLICT (key) DO NOTHING;
+CREATE TABLE IF NOT EXISTS public.coupons (
+    code TEXT PRIMARY KEY,
+    discount_percent NUMERIC NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public full access to coupons" ON public.coupons;
+CREATE POLICY "Public full access to coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.coupon_usages (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    email TEXT NOT NULL,
+    plan_id TEXT NOT NULL,
+    original_price NUMERIC NOT NULL,
+    discounted_price NUMERIC NOT NULL,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.coupon_usages ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public full access to coupon_usages" ON public.coupon_usages;
+CREATE POLICY "Public full access to coupon_usages" ON public.coupon_usages FOR ALL USING (true) WITH CHECK (true);
+
+
+-- ==========================================
+-- MODEL PRICES (For Landing Page)
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.model_prices (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    cost NUMERIC NOT NULL,
+    is_active BOOLEAN DEFAULT true
+);
+
+INSERT INTO public.model_prices (id, name, cost, is_active) VALUES
+('chatgpt', 'ChatGPT Plus', 2000, true),
+('claude', 'Claude Pro', 2000, true),
+('grok', 'Grok', 1500, true),
+('perplexity', 'Perplexity Pro', 2000, true),
+('mistral', 'Mistral Large', 1800, true)
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE public.model_prices ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public full access to model_prices" ON public.model_prices;
+CREATE POLICY "Public full access to model_prices" ON public.model_prices FOR ALL USING (true) WITH CHECK (true);
 `;
 };
 
