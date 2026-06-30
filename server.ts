@@ -191,7 +191,7 @@ async function init() {
     console.log("Starting development mode with Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: "custom",
+      appType: "spa",
     });
 
     app.use(vite.middlewares);
@@ -203,28 +203,11 @@ async function init() {
       }
       next();
     });
-
-    // Dynamic catch-all router for SPA page refreshes in development mode
-    app.get("*", async (req, res, next) => {
-      if (req.originalUrl.startsWith("/api")) {
-        return next();
-      }
-      try {
-        const fs = await import("fs");
-        const templatePath = path.resolve(process.cwd(), "index.html");
-        let html = fs.readFileSync(templatePath, "utf-8");
-        html = await vite.transformIndexHtml(req.originalUrl, html);
-        res.status(200).set({ "Content-Type": "text/html" }).end(html);
-      } catch (e) {
-        console.error("[Dev Routing Error] Failed to transform/serve index.html:", e);
-        next(e);
-      }
-    });
   } else {
     console.log("Starting production mode serving static dist files...");
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.use("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
