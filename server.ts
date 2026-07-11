@@ -203,6 +203,23 @@ async function init() {
       }
       next();
     });
+
+    // SPA Fallback for development mode
+    app.use("*", async (req, res, next) => {
+      if (req.originalUrl.startsWith("/api")) {
+        return next();
+      }
+      try {
+        const fs = await import("fs");
+        const templatePath = path.resolve(process.cwd(), "index.html");
+        let html = fs.readFileSync(templatePath, "utf-8");
+        html = await vite.transformIndexHtml(req.originalUrl, html);
+        res.status(200).set({ "Content-Type": "text/html" }).end(html);
+      } catch (e) {
+        console.error("[Dev Routing Error] Failed to transform/serve index.html:", e);
+        next(e);
+      }
+    });
   } else {
     console.log("Starting production mode serving static dist files...");
     const distPath = path.join(process.cwd(), "dist");
