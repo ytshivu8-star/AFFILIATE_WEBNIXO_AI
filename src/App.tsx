@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   Sparkles, MousePointerClick, Users, DollarSign, ArrowUpRight, 
   Award, FileText, Settings, CreditCard, LogOut, Shield, Menu, X, Check, Lock, UserCheck,
@@ -168,10 +169,13 @@ export default function App() {
       .catch(err => console.warn("Error fetching Resend status:", err));
   }, []);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   // Dynamic Browser Routing and State Synchronization
   useEffect(() => {
     const syncRouteFromPath = () => {
-      const path = window.location.pathname;
+      const path = location.pathname;
       const cachedIsLoggedIn = localStorage.getItem('wwebnixo_isLoggedIn') === 'true';
       const cachedIsAdmin = localStorage.getItem('wwebnixo_isAdmin') === 'true';
 
@@ -202,36 +206,29 @@ export default function App() {
         // Not logged in but requesting a protected page - default to /login
         setIsLoggedIn(false);
         setAuthMode('login');
-        window.history.replaceState({}, '', '/login');
+        navigate('/login', { replace: true });
       }
     };
 
-    // Run on initial mount
     syncRouteFromPath();
-
-    // Listen to browser navigation buttons (Back/Forward)
-    window.addEventListener('popstate', syncRouteFromPath);
-    return () => {
-      window.removeEventListener('popstate', syncRouteFromPath);
-    };
-  }, []);
+  }, [location.pathname]);
 
   // Automatically update the browser address bar whenever react states change
   useEffect(() => {
     if (!isLoggedIn) {
       if (authMode === 'login') {
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          window.history.pushState({}, '', '/login');
+        if (location.pathname !== '/login' && location.pathname !== '/') {
+          navigate('/login');
         }
       } else if (authMode === 'signup') {
-        if (window.location.pathname !== '/signup' && window.location.pathname !== '/register') {
-          window.history.pushState({}, '', '/signup');
+        if (location.pathname !== '/signup' && location.pathname !== '/register') {
+          navigate('/signup');
         }
       }
     } else {
       if (isAdminMode) {
-        if (window.location.pathname !== '/admin') {
-          window.history.pushState({}, '', '/admin');
+        if (location.pathname !== '/admin') {
+          navigate('/admin');
         }
       } else {
         let expectedPath = '/dashboard';
@@ -242,8 +239,8 @@ export default function App() {
         else if (activeTab === 'terms') expectedPath = '/terms';
         else if (activeTab === 'profile') expectedPath = '/profile';
 
-        if (window.location.pathname !== expectedPath) {
-          window.history.pushState({}, '', expectedPath);
+        if (location.pathname !== expectedPath) {
+          navigate(expectedPath);
         }
       }
     }
@@ -1892,17 +1889,17 @@ export default function App() {
                       if (route === 'login') {
                         setIsLoggedIn(false);
                         setAuthMode('login');
-                        window.history.pushState({}, '', '/login');
+                        navigate('/login');
                       } else if (route === 'signup') {
                         setIsLoggedIn(false);
                         setAuthMode('signup');
-                        window.history.pushState({}, '', '/signup');
+                        navigate('/signup');
                       } else if (route === 'admin') {
                         setIsAdminMode(true);
-                        window.history.pushState({}, '', '/admin');
+                        navigate('/admin');
                       } else if (route === 'logout') {
                         handleLogout();
-                        window.history.pushState({}, '', '/login');
+                        navigate('/login');
                       } else {
                         setIsAdminMode(false);
                         setActiveTab(route as any);
@@ -1914,7 +1911,7 @@ export default function App() {
                           terms: '/terms',
                           profile: '/profile'
                         };
-                        window.history.pushState({}, '', pathMap[route] || '/dashboard');
+                        navigate(pathMap[route] || '/dashboard');
                       }
                     }}
                   />
