@@ -664,83 +664,42 @@ export const storeOTPInSupabase = async (
 export const verifyOTPFromSupabase = async (
   email: string,
   otpCode: string,
-  purpose: string
+  purpose: string,
+  turnstileToken: string = ''
 ): Promise<{ success: boolean; error?: string }> => {
-  if (!supabase) return { success: false, error: "Supabase client not initialized" };
   try {
-    const cleanEmail = email.toLowerCase().trim();
-    const { data, error } = await supabase
-      .from('webnixo_otps_affilate')
-      .select('*')
-      .eq('email', cleanEmail)
-      .eq('otp_code', otpCode)
-      .eq('purpose', purpose)
-      .eq('verified', false)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    if (!data || data.length === 0) {
-      return { success: false, error: "Incorrect security code." };
-    }
-
-    const otpRecord = data[0];
-    const isExpired = new Date(otpRecord.expires_at).getTime() < Date.now();
-    if (isExpired) {
-      return { success: false, error: "This security code has expired." };
-    }
-
-    // Mark as verified
-    await supabase
-      .from('webnixo_otps_affilate')
-      .update({ verified: true })
-      .eq('id', otpRecord.id);
-
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otpCode, purpose, turnstileToken })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success: false, error: data.error || "Verification failed" };
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || "OTP verification exception" };
+    return { success: false, error: err.message };
   }
 };
+
 
 export const loadSubscriptionPlansFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('subscription_plans')
-      .select('*')
-      .order('cost', { ascending: true });
-    
-    if (error || !data) return null;
+    const { data, error } = await supabase.from('subscription_plans').select('*').order('cost', { ascending: true });
+    if (error) return null;
     return data;
   } catch (err) {
-    console.warn("Supabase load subscription plans error:", err);
     return null;
   }
 };
 
 export const saveSubscriptionPlanToSupabase = async (plan: any): Promise<{ success: boolean; error?: string }> => {
-  if (!supabase) return { success: false, error: 'Supabase client not initialized' };
+  if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
-    const { error } = await supabase
-      .from('subscription_plans')
-      .upsert({
-        id: plan.id,
-        name: plan.name,
-        cost: plan.cost,
-        period: plan.period,
-        is_active: plan.is_active
-      }, { onConflict: 'id' });
-    
-    if (error) {
-      console.warn("Error saving subscription plan:", error.message, error);
-      return { success: false, error: error.message };
-    }
+    const { error } = await supabase.from('subscription_plans').upsert(plan);
+    if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {
-    console.warn("Supabase save subscription plan exception:", err);
-    return { success: false, error: err.message || 'Unknown error' };
+    return { success: false, error: err.message };
   }
 };
-

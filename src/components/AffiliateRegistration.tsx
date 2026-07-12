@@ -3,7 +3,7 @@ import {
   Building, Globe, Briefcase, ChevronRight, CheckCircle2, 
   HelpCircle, ArrowUpRight, DollarSign, FileText, Sparkles 
 } from 'lucide-react';
-import { UserProfile } from '../types';
+import { UserProfile } from '../types';\nimport { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';\nimport { useRef, useState } from 'react';
 
 interface AffiliateRegistrationProps {
   onRegister: (data: Partial<UserProfile>) => void;

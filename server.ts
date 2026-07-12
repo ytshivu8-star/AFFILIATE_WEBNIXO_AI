@@ -2,6 +2,8 @@ import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
+import { createClient } from "@supabase/supabase-js";
+
 
 // Load environment variables
 dotenv.config();
@@ -48,10 +50,303 @@ app.get("/api/resend-status", (req, res) => {
   });
 });
 
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+
+function logSecurityEvent(req, endpoint, email, status, reason) {
+  const ip = getIP(req);
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  const timestamp = new Date().toISOString();
+  console.log(JSON.stringify({
+    timestamp,
+    endpoint,
+    ip_address: ip,
+    user_agent: userAgent,
+    email: email || 'unknown',
+    status,
+    reason
+  }));
+}
+
+const getIP = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  return (Array.isArray(forwarded) ? forwarded[0] : forwarded) || req.socket?.remoteAddress || '127.0.0.1';
+};
+
+
+const verifyTurnstile = async (token, ip) => {
+  if (!token) return { success: false, 'error-codes': ['missing-input-response'] };
+  const secret = process.env.TURNSTILE_SECRET_KEY || "0x4AAAAAAD0Yht6iLBzaC63Jj_nmCLm5Iog";
+  const formData = new FormData();
+  formData.append('secret', secret);
+  formData.append('response', token);
+  formData.append('remoteip', ip);
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    return { success: false, 'error-codes': ['fetch-error'] };
+  }
+};
+
+function logTurnstileEvent(req, endpoint, success, reason) {
+  const ip = getIP(req);
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  const timestamp = new Date().toISOString();
+  console.log(JSON.stringify({
+    timestamp,
+    endpoint,
+    ip_address: ip,
+    user_agent: userAgent,
+    event: 'Turnstile Verification',
+    status: success ? 'Success' : 'Failure',
+    reason: reason || (success ? '' : 'Invalid token')
+  }));
+}
+
+async function checkRateLimit(action, identifier, maxRequests, windowMs) {
+  if (!supabase) return { allowed: true };
+  const key = `rl_${action}_${identifier}`;
+  const now = Date.now();
+
+  try {
+    const { data } = await supabase
+      .from('webnixo_settings_affilate')
+      .select('value')
+      .eq('key', key)
+      .maybeSingle();
+
+    let count = 0;
+    let expireAt = now + windowMs;
+
+    if (data && data.value) {
+      try {
+        const parsed = JSON.parse(data.value);
+        if (parsed.expireAt > now) {
+          count = parsed.count;
+          expireAt = parsed.expireAt;
+        }
+      } catch (e) {}
+    }
+
+    if (count >= maxRequests) {
+      // Handled by endpoint now
+      return { allowed: false };
+    }
+
+    await supabase.from('webnixo_settings_affilate').upsert({
+      key,
+      value: JSON.stringify({ count: count + 1, expireAt }),
+      updated_at: new Date().toISOString()
+    });
+
+    return { allowed: true };
+  } catch (err) {
+    console.error("Rate limit check error:", err);
+    return { allowed: true }; // fail open if DB is down
+  }
+}
+
+async function clearRateLimit(action, identifier) {
+  if (!supabase) return;
+  const key = `rl_${action}_${identifier}`;
+  try {
+    await supabase.from('webnixo_settings_affilate').delete().eq('key', key);
+  } catch (err) {}
+}
+
+app.post("/api/auth/login", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/login', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/login', true);
+  
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Missing fields" });
+
+  const rl = await checkRateLimit("login", ip, 5, 15 * 60 * 1000);
+  if (!rl.allowed) { logSecurityEvent(req, '/api/auth/login', email, 'Blocked', 'Rate limit exceeded (5/15m)'); return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." }); }
+
+  if (!supabase) return res.json({ success: true });
+
+  const { data, error } = await supabase.from('webnixo_profiles_affilate').select('*').eq('email', email).maybeSingle();
+  
+  if (error || !data || data.password !== password) {
+    logSecurityEvent(req, '/api/auth/login', email, 'Blocked', 'Invalid credentials');
+    return res.status(401).json({ error: "Invalid credentials." });
+  }
+
+  logSecurityEvent(req, '/api/auth/login', email, 'Allowed', 'Success');
+  await clearRateLimit("login", ip);
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/signup", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/signup', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/signup', true);
+  
+  const rl = await checkRateLimit("signup", ip, 3, 60 * 60 * 1000);
+  if (!rl.allowed) { logSecurityEvent(req, '/api/auth/signup', req.body.email, 'Blocked', 'Rate limit exceeded (3/1h)'); return res.status(429).json({ error: "Too many signup attempts. Please try again later." }); }
+  
+  logSecurityEvent(req, '/api/auth/signup', req.body.email, 'Allowed', 'Success');
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/verify-otp", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/verify-otp', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/verify-otp', true);
+  
+  const { email, otpCode, purpose } = req.body;
+
+  const rl = await checkRateLimit(`verify_otp`, email, 5, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    if (supabase) await supabase.from('webnixo_otps_affilate').delete().eq('email', email).eq('purpose', purpose);
+    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'Rate limit exceeded (5/15m) - OTP invalidated');
+    return res.status(429).json({ error: "Too many incorrect attempts. OTP invalidated. Request a new one." });
+  }
+
+  if (!supabase) return res.json({ success: true });
+
+  const { data, error } = await supabase.from('webnixo_otps_affilate')
+    .select('*').eq('email', email).eq('otp_code', otpCode).eq('purpose', purpose).maybeSingle();
+
+  if (error || !data) {
+    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'Incorrect security code');
+    return res.status(400).json({ error: "Incorrect security code." });
+  }
+
+  if (new Date(data.created_at).getTime() + 5 * 60 * 1000 < Date.now()) {
+    await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
+    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'OTP expired'); return res.status(400).json({ error: "OTP expired. Please request a new one." });
+  }
+
+  await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
+  await clearRateLimit(`verify_otp`, email);
+  
+  logSecurityEvent(req, '/api/auth/verify-otp', email, 'Allowed', 'Success');
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/reset-password", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/reset-password', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/reset-password', true);
+  
+  const { email, password } = req.body;
+  const rl = await checkRateLimit("reset_pw", ip, 5, 60 * 60 * 1000);
+  if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
+  
+  if (supabase && email && password) {
+    await supabase.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
+  }
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/google-callback", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/google-callback', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/google-callback', true);
+  
+  const rl = await checkRateLimit("google_callback", ip, 10, 15 * 60 * 1000);
+  if (!rl.allowed) return res.status(429).json({ error: "Too many attempts." });
+  return res.json({ success: true });
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/auth/forgot-password', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/auth/forgot-password', true);
+  
+  const { email } = req.body;
+  const rl = await checkRateLimit(`forgot_pw`, email, 3, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return res.json({ success: true, message: "If an account exists, we've sent reset instructions." });
+  }
+  return res.json({ success: true });
+});
+
+
 // API: Send OTP email proxy route (Server-side bypasses browser CORS and secures the API Key)
 app.post("/api/send-otp", async (req, res) => {
   try {
+
+  const ip = getIP(req);
+  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+  if (!turnstileData.success) {
+    logTurnstileEvent(req, '/api/send-otp', false, turnstileData['error-codes']?.join(', '));
+    return res.status(403).json({ success: false, error: "Turnstile verification failed. Please try again." });
+  }
+  logTurnstileEvent(req, '/api/send-otp', true);
+  
     const { toEmail, otpCode, purpose } = req.body;
+
+    
+    if (purpose === 'forgot_password') {
+      const rlForgot = await checkRateLimit(`forgot_email`, toEmail, 3, 60 * 60 * 1000);
+      if (!rlForgot.allowed) {
+        logSecurityEvent(req, '/api/send-otp (forgot)', toEmail, 'Blocked', 'Rate limit exceeded (3/1h)');
+        return res.json({ success: true, messageId: "simulated" }); // "Always return the same response"
+      }
+    } else if (purpose === 'register') {
+      const rlResend = await checkRateLimit(`resend_email`, toEmail, 3, 60 * 60 * 1000);
+      if (!rlResend.allowed) {
+         logSecurityEvent(req, '/api/send-otp (resend)', toEmail, 'Blocked', 'Rate limit exceeded (3/1h)');
+         return res.status(429).json({ success: false, error: "Too many verification email requests. Please try again in 1 hour." });
+      }
+    }
+
+    const emailLimit = await checkRateLimit("otp_email", toEmail, 3, 10 * 60 * 1000);
+    if (!emailLimit.allowed) { logSecurityEvent(req, '/api/send-otp', toEmail, 'Blocked', 'Rate limit exceeded per email (3/10m)'); return res.status(429).json({ success: false, error: "Too many OTP requests for this email. Please try again later." }); }
+
+
+    const ipLimit = await checkRateLimit("otp_ip", ip, 10, 60 * 60 * 1000);
+    if (!ipLimit.allowed) { logSecurityEvent(req, '/api/send-otp', toEmail, 'Blocked', 'Rate limit exceeded per IP (10/1h)'); return res.status(429).json({ success: false, error: "Too many OTP requests. Please try again later." }); }
+
+    if (supabase) {
+      await supabase.from('webnixo_otps_affilate').insert({
+        id: Math.random().toString(36).substring(2, 15),
+        email: toEmail.toLowerCase().trim(),
+        otp_code: otpCode,
+        purpose,
+        verified: false,
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      });
+    }
+
+
+
 
     if (!toEmail || !otpCode || !purpose) {
       return res.status(400).json({ success: false, error: "Missing required fields (toEmail, otpCode, purpose)" });

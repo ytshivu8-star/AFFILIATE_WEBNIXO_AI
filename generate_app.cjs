@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect, useRef } from 'react';
 import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { 
@@ -44,7 +46,7 @@ export default function App() {
   const turnstileRef = useRef<TurnstileInstance>(null);
 
   const [user, setUser] = useState<UserProfile>({
-    id: `user_${Math.floor(1000 + Math.random() * 9000)}`,
+    id: \`user_\${Math.floor(1000 + Math.random() * 9000)}\`,
     email: '',
     fullName: '',
     phone: '',
@@ -67,7 +69,6 @@ export default function App() {
 
   const [payoutHistory, setPayoutHistory] = useState<PayoutHistoryItem[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [events, setEvents] = useState<ReferralEvent[]>([]);
 
   useEffect(() => {
@@ -350,18 +351,16 @@ export default function App() {
       <aside className="w-64 bg-slate-900 text-white flex flex-col hidden md:flex min-h-screen relative p-4">
         <h2 className="text-xl font-bold mb-8 tracking-tight">WEBNIXO</h2>
         <nav className="space-y-2 flex-1">
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'dashboard' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><MousePointerClick size={18}/> Dashboard</button>
+          <button onClick={() => setActiveTab('dashboard')} className={\`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 \${activeTab === 'dashboard' ? 'bg-indigo-600' : 'hover:bg-slate-800'}\`}><MousePointerClick size={18}/> Dashboard</button>
           {!isAdminMode && (
             <>
-              <button onClick={() => setActiveTab('leaderboard')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'leaderboard' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><Award size={18}/> Leaderboard</button>
-              <button onClick={() => setActiveTab('resources')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'resources' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><Sparkles size={18}/> Resources</button>
-              <button onClick={() => setActiveTab('payout')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'payout' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><DollarSign size={18}/> Payout</button>
-              <button onClick={() => setActiveTab('profile')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'profile' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><Settings size={18}/> Profile</button>
-              <button onClick={() => setActiveTab('terms')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'terms' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><FileText size={18}/> Terms & Conditions</button>
+              <button onClick={() => setActiveTab('resources')} className={\`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 \${activeTab === 'resources' ? 'bg-indigo-600' : 'hover:bg-slate-800'}\`}><Sparkles size={18}/> Resources</button>
+              <button onClick={() => setActiveTab('payout')} className={\`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 \${activeTab === 'payout' ? 'bg-indigo-600' : 'hover:bg-slate-800'}\`}><DollarSign size={18}/> Payout</button>
+              <button onClick={() => setActiveTab('profile')} className={\`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 \${activeTab === 'profile' ? 'bg-indigo-600' : 'hover:bg-slate-800'}\`}><Settings size={18}/> Profile</button>
             </>
           )}
           {isAdminMode && (
-             <button onClick={() => setActiveTab('admin')} className={`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 ${activeTab === 'admin' ? 'bg-indigo-600' : 'hover:bg-slate-800'}`}><Shield size={18}/> Admin Portal</button>
+             <button onClick={() => setActiveTab('admin')} className={\`w-full text-left px-4 py-2 rounded-lg flex items-center gap-3 \${activeTab === 'admin' ? 'bg-indigo-600' : 'hover:bg-slate-800'}\`}><Shield size={18}/> Admin Portal</button>
           )}
         </nav>
         <button onClick={logout} className="mt-auto flex items-center gap-3 text-slate-400 hover:text-white px-4 py-2"><LogOut size={18}/> Logout</button>
@@ -376,14 +375,14 @@ export default function App() {
         </header>
         <div className="p-4 md:p-8 flex-1 overflow-auto">
           {activeTab === 'dashboard' && (isAdminMode ? <div>Admin Dashboard (Select Admin Portal Tab)</div> : <Dashboard user={user} stats={stats} chartData={chartData} events={events} />)}
-          {activeTab === 'leaderboard' && <Leaderboard user={user} leaderboard={leaderboard} />}
           {activeTab === 'resources' && <MarketingResources user={user} />}
           {activeTab === 'payout' && <PayoutDetailsComponent user={user} payout={payout} setPayout={setPayout} payoutHistory={payoutHistory} saveState={() => {}} />}
           {activeTab === 'profile' && <ProfileSettings user={user} setUser={setUser} saveState={() => {}} />}
-          {activeTab === 'terms' && <TermsAndConditions />}
           {activeTab === 'admin' && isAdminMode && <AdminPortal />}
         </div>
       </main>
     </div>
   );
 }
+`
+fs.writeFileSync('src/App.tsx', code);
