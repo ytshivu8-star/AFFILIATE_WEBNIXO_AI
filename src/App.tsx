@@ -30,8 +30,7 @@ export default function App() {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [verificationMode, setVerificationMode] = useState<'none' | 'signup_otp' | 'forgot_email' | 'forgot_otp' | 'reset_password'>('none');
-  const [otpCode, setOtpCode] = useState('');
-  const [otpInput, setOtpInput] = useState('');
+    const [otpInput, setOtpInput] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -96,16 +95,13 @@ export default function App() {
     setOtpLoading(true);
     setOtpError('');
     setOtpStatusMsg('');
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setOtpCode(code);
-    
+
     try {
       const res = await fetch("/api/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           toEmail: email, 
-          otpCode: code, 
           purpose,
           turnstileToken: currentTurnstileToken || turnstileToken 
         })
@@ -116,7 +112,7 @@ export default function App() {
       } else {
         setOtpError(data.error || "Failed to send email");
       }
-    } catch (err: any) {
+    } catch (err) {
       setOtpError("Network error.");
     }
     setOtpLoading(false);
@@ -324,8 +320,7 @@ export default function App() {
     setEmailInput(emailToReset);
     setPasswordInput(newPasswordInput);
     setOtpInput('');
-    setOtpCode('');
-    setNewPasswordInput('');
+        setNewPasswordInput('');
     setConfirmNewPasswordInput('');
     setOtpError('');
     setOtpStatusMsg('');
@@ -435,7 +430,7 @@ export default function App() {
                   {authMode === 'login' ? 'Sign in to dashboard' : 'Create account'}
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4 pb-2 border-t border-slate-100 mt-6">
@@ -461,7 +456,7 @@ export default function App() {
                   Verify Email
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4">
@@ -490,7 +485,7 @@ export default function App() {
                   Send reset link
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4">
@@ -516,7 +511,7 @@ export default function App() {
                   Update password
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
               </form>
             )}

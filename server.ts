@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -9,6 +10,7 @@ import { createClient } from "@supabase/supabase-js";
 dotenv.config();
 
 const app = express();
+const otpStore = new Map();
 const PORT = 3000;
 
 // Middleware for parsing JSON requests
@@ -202,36 +204,72 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   logTurnstileEvent(req, '/api/auth/verify-otp', true);
   
   const { email, otpCode, purpose } = req.body;
+  const cleanEmail = email.toLowerCase().trim();
+  const inputHash = crypto.createHash('sha256').update(otpCode.trim()).digest('hex');
 
-  const rl = await checkRateLimit(`verify_otp`, email, 5, 15 * 60 * 1000);
+  const rl = await checkRateLimit(`verify_otp`, cleanEmail, 5, 15 * 60 * 1000);
   if (!rl.allowed) {
-    if (supabase) await supabase.from('webnixo_otps_affilate').delete().eq('email', email).eq('purpose', purpose);
-    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'Rate limit exceeded (5/15m) - OTP invalidated');
+    if (supabase) await supabase.from('webnixo_otps_affilate').delete().eq('email', cleanEmail).eq('purpose', purpose);
+    else otpStore.delete(`${cleanEmail}_${purpose}`);
+    logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'Rate limit exceeded (5/15m) - OTP invalidated');
     return res.status(429).json({ error: "Too many incorrect attempts. OTP invalidated. Request a new one." });
   }
 
-  if (!supabase) return res.json({ success: true });
+  if (supabase) {
+    const { data, error } = await supabase.from('webnixo_otps_affilate')
+      .select('*').eq('email', cleanEmail).eq('purpose', purpose).maybeSingle();
 
-  const { data, error } = await supabase.from('webnixo_otps_affilate')
-    .select('*').eq('email', email).eq('otp_code', otpCode).eq('purpose', purpose).maybeSingle();
+    if (error || !data) {
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'OTP not found');
+      return res.status(400).json({ error: "Invalid or expired OTP." });
+    }
 
-  if (error || !data) {
-    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'Incorrect security code');
-    return res.status(400).json({ error: "Incorrect security code." });
-  }
+    const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : new Date(data.created_at).getTime() + 5 * 60 * 1000;
+    if (expiresAt < Date.now()) {
+      await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'OTP expired'); 
+      return res.status(400).json({ error: "OTP expired. Please request a new one." });
+    }
 
-  if (new Date(data.created_at).getTime() + 5 * 60 * 1000 < Date.now()) {
+    if (data.otp_code !== inputHash && data.otp_code !== otpCode.trim()) {
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'Incorrect security code');
+      return res.status(400).json({ error: "Incorrect security code." });
+    }
+
     await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
-    logSecurityEvent(req, '/api/auth/verify-otp', email, 'Blocked', 'OTP expired'); return res.status(400).json({ error: "OTP expired. Please request a new one." });
+  } else {
+    const key = `${cleanEmail}_${purpose}`;
+    const record = otpStore.get(key);
+    
+    if (!record) {
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'OTP not found');
+      return res.status(400).json({ error: "Invalid or expired OTP." });
+    }
+    
+    if (Date.now() > record.expiresAt) {
+      otpStore.delete(key);
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'OTP expired'); 
+      return res.status(400).json({ error: "OTP expired. Please request a new one." });
+    }
+    
+    if (record.hash !== inputHash) {
+      record.attempts += 1;
+      if (record.attempts >= 5) {
+        otpStore.delete(key);
+        logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'Too many failed attempts');
+        return res.status(429).json({ error: "Too many attempts. OTP invalidated." });
+      }
+      logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'Incorrect security code');
+      return res.status(400).json({ error: "Incorrect security code." });
+    }
+    
+    otpStore.delete(key);
   }
 
-  await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
-  await clearRateLimit(`verify_otp`, email);
-  
-  logSecurityEvent(req, '/api/auth/verify-otp', email, 'Allowed', 'Success');
+  await clearRateLimit(`verify_otp`, cleanEmail);
+  logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Allowed', 'Success');
   return res.json({ success: true });
 });
-
 app.post("/api/auth/reset-password", async (req, res) => {
   const ip = getIP(req);
   const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
@@ -286,55 +324,58 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 // API: Send OTP email proxy route (Server-side bypasses browser CORS and secures the API Key)
 app.post("/api/send-otp", async (req, res) => {
   try {
-
-  const ip = getIP(req);
-  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
-  if (!turnstileData.success) {
-    logTurnstileEvent(req, '/api/send-otp', false, turnstileData['error-codes']?.join(', '));
-    return res.status(403).json({ success: false, error: "Turnstile verification failed. Please try again." });
-  }
-  logTurnstileEvent(req, '/api/send-otp', true);
-  
-    const { toEmail, otpCode, purpose } = req.body;
-
+    const ip = getIP(req);
+    const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+    if (!turnstileData.success) {
+      logTurnstileEvent(req, '/api/send-otp', false, turnstileData['error-codes']?.join(', '));
+      return res.status(403).json({ success: false, error: "Turnstile verification failed. Please try again." });
+    }
+    logTurnstileEvent(req, '/api/send-otp', true);
     
+    const { toEmail, purpose } = req.body;
+    if (!toEmail || !purpose) {
+      return res.status(400).json({ success: false, error: "Missing required fields (toEmail, purpose)" });
+    }
+
+    const email = toEmail.toLowerCase().trim();
+
     if (purpose === 'forgot_password') {
-      const rlForgot = await checkRateLimit(`forgot_email`, toEmail, 3, 60 * 60 * 1000);
+      const rlForgot = await checkRateLimit(`forgot_email`, email, 3, 10 * 60 * 1000);
       if (!rlForgot.allowed) {
-        logSecurityEvent(req, '/api/send-otp (forgot)', toEmail, 'Blocked', 'Rate limit exceeded (3/1h)');
+        logSecurityEvent(req, '/api/send-otp (forgot)', email, 'Blocked', 'Rate limit exceeded (3/10m)');
         return res.json({ success: true, messageId: "simulated" }); // "Always return the same response"
       }
     } else if (purpose === 'register') {
-      const rlResend = await checkRateLimit(`resend_email`, toEmail, 3, 60 * 60 * 1000);
+      const rlResend = await checkRateLimit(`resend_email`, email, 3, 10 * 60 * 1000);
       if (!rlResend.allowed) {
-         logSecurityEvent(req, '/api/send-otp (resend)', toEmail, 'Blocked', 'Rate limit exceeded (3/1h)');
-         return res.status(429).json({ success: false, error: "Too many verification email requests. Please try again in 1 hour." });
+         logSecurityEvent(req, '/api/send-otp (resend)', email, 'Blocked', 'Rate limit exceeded (3/10m)');
+         return res.json({ success: true, messageId: "simulated" });
       }
     }
 
-    const emailLimit = await checkRateLimit("otp_email", toEmail, 3, 10 * 60 * 1000);
-    if (!emailLimit.allowed) { logSecurityEvent(req, '/api/send-otp', toEmail, 'Blocked', 'Rate limit exceeded per email (3/10m)'); return res.status(429).json({ success: false, error: "Too many OTP requests for this email. Please try again later." }); }
-
-
-    const ipLimit = await checkRateLimit("otp_ip", ip, 10, 60 * 60 * 1000);
-    if (!ipLimit.allowed) { logSecurityEvent(req, '/api/send-otp', toEmail, 'Blocked', 'Rate limit exceeded per IP (10/1h)'); return res.status(429).json({ success: false, error: "Too many OTP requests. Please try again later." }); }
+    // Generate secure random OTP (6 digits)
+    const otpCode = crypto.randomInt(100000, 999999).toString();
+    const otpHash = crypto.createHash('sha256').update(otpCode).digest('hex');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
 
     if (supabase) {
-      await supabase.from('webnixo_otps_affilate').insert({
+      await supabase.from('webnixo_otps_affilate').delete().eq('email', email).eq('purpose', purpose);
+      
+      const { error } = await supabase.from('webnixo_otps_affilate').insert({
         id: Math.random().toString(36).substring(2, 15),
-        email: toEmail.toLowerCase().trim(),
-        otp_code: otpCode,
+        email,
+        otp_code: otpHash,
         purpose,
         verified: false,
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+        expires_at: expiresAt.toISOString(),
       });
-    }
-
-
-
-
-    if (!toEmail || !otpCode || !purpose) {
-      return res.status(400).json({ success: false, error: "Missing required fields (toEmail, otpCode, purpose)" });
+      // Handle missing 'attempts' column gracefully if it doesn't exist by not adding it.
+    } else {
+      otpStore.set(`${email}_${purpose}`, {
+        hash: otpHash,
+        expiresAt: expiresAt.getTime(),
+        attempts: 0
+      });
     }
 
     let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
@@ -343,118 +384,42 @@ app.post("/api/send-otp", async (req, res) => {
     let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
     rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
-    // Determine the sender email
     let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
     if (rawFromEmail) {
       fromEmail = rawFromEmail;
     } else if (rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj") {
-      // If they provided their own key and haven't explicitly set a custom from email,
-      // default to their verified domain auth.webnixo.in!
-      fromEmail = "WEBNIXO AI <no-reply@auth.webnixo.in>";
+      fromEmail = "WEBNIXO AI <info@webnixo.in>";
     }
 
-    const subject = purpose === 'register' 
-      ? `[WEBNIXO AI] Confirm Your Affiliate Registration` 
-      : `[WEBNIXO AI] Reset Your Affiliate Account Password`;
-
-    const htmlBody = `
-      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 550px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;">
-        <div style="text-align: center; margin-bottom: 25px;">
-          <h2 style="color: #4f46e5; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">WEBNIXO AI</h2>
-          <p style="color: #64748b; font-size: 12px; margin-top: 5px; text-transform: uppercase; tracking: 1px;">Affiliate Partner Network</p>
-        </div>
-        
-        <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
-          <p style="font-size: 15px; line-height: 1.6; color: #334155;">Hello,</p>
-          <p style="font-size: 15px; line-height: 1.6; color: #334155;">
-            ${purpose === 'register' 
-              ? 'Thank you for registering to join the WEBNIXO AI Affiliate Partner network. To complete your account verification, please use the 6-digit verification code below:' 
-              : 'We received a request to reset the password for your WEBNIXO AI Affiliate Partner account. Use the 6-digit security code below to set a new password:'}
-          </p>
-          
-          <div style="text-align: center; margin: 30px 0;">
-            <div style="display: inline-block; background-color: #f5f3ff; border: 2px dashed #818cf8; border-radius: 12px; padding: 15px 35px; font-size: 32px; font-weight: 800; letter-spacing: 5px; color: #4f46e5;">
-              ${otpCode}
-            </div>
-            <p style="font-size: 11px; color: #94a3b8; margin-top: 10px;">This security code is valid for the next 10 minutes.</p>
-          </div>
-          
-          <p style="font-size: 14px; line-height: 1.6; color: #64748b; margin-top: 25px;">
-            If you did not make this request, you can safely ignore this email.
-          </p>
-        </div>
-        
-        <div style="border-top: 1px solid #f1f5f9; margin-top: 30px; padding-top: 15px; text-align: center;">
-          <p style="font-size: 11px; color: #94a3b8; margin: 0;">&copy; 2026 WEBNIXO AI Partner Network. All rights reserved.</p>
-          <p style="font-size: 9px; color: #cbd5e1; margin-top: 5px;">Sent securely via Resend API.</p>
-        </div>
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>WEBNIXO Verification</h2>
+        <p>Your verification code is: <strong>${otpCode}</strong></p>
+        <p>This code will expire in 5 minutes.</p>
+        <p>If you didn't request this, you can safely ignore this email.</p>
       </div>
     `;
 
-    const sendWithFrom = async (fromAddress: string) => {
-      console.log(`Sending OTP Email via Resend. From: "${fromAddress}" | To: "${toEmail}" | Purpose: "${purpose}"`);
-      return await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${rawApiKey}`,
-        },
-        body: JSON.stringify({
-          from: fromAddress,
-          to: [toEmail],
-          subject: subject,
-          html: htmlBody,
-        }),
-      });
-    };
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${rawApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: email,
+        subject: `WEBNIXO - Your Verification Code: ${otpCode}`,
+        html: emailHtml
+      })
+    });
 
-    let resendResponse = await sendWithFrom(fromEmail);
-
-    // Auto-fallback 1: If 422 validation error and display name was used, strip display name and try raw email
-    if (resendResponse.status === 422 && fromEmail.includes("<")) {
-      const emailMatch = fromEmail.match(/<([^>]+)>/);
-      if (emailMatch && emailMatch[1]) {
-        const rawEmailOnly = emailMatch[1].trim();
-        console.warn(`Resend 422 validation error with display name. Retrying with raw email only: "${rawEmailOnly}"`);
-        resendResponse = await sendWithFrom(rawEmailOnly);
-      }
-    }
-
-    // Auto-fallback 2: If still 422 and we are using a custom domain, try falling back to onboarding@resend.dev sandbox address
-    // just in case they haven't finished verifying the domain in their Resend dashboard
-    if (resendResponse.status === 422 && !fromEmail.includes("onboarding@resend.dev")) {
-      console.warn(`Resend 422 validation error with custom domain. Retrying with onboarding@resend.dev sandbox address`);
-      resendResponse = await sendWithFrom("WEBNIXO AI <onboarding@resend.dev>");
-    }
-
-    if (resendResponse.ok) {
-      const resData = await resendResponse.json();
-      return res.json({ success: true, messageId: resData.id });
+    const data = await response.json();
+    if (response.ok) {
+      logSecurityEvent(req, '/api/send-otp', email, 'Allowed', 'OTP Generated & Sent');
+      return res.json({ success: true, messageId: data.id });
     } else {
-      const errText = await resendResponse.text();
-      console.error("Resend API returned error after all fallback attempts:", errText);
-      
-      let parsedError = errText;
-      try {
-        const jsonErr = JSON.parse(errText);
-        if (jsonErr) {
-          if (jsonErr.message) {
-            parsedError = jsonErr.message;
-          } else if (jsonErr.error && typeof jsonErr.error === 'object' && jsonErr.error.message) {
-            parsedError = jsonErr.error.message;
-          } else if (jsonErr.error && typeof jsonErr.error === 'string') {
-            parsedError = jsonErr.error;
-          } else if (jsonErr.description) {
-            parsedError = jsonErr.description;
-          } else if (jsonErr.name) {
-            parsedError = `${jsonErr.name}${jsonErr.message ? ': ' + jsonErr.message : ''}`;
-          }
-        }
-      } catch (e) {
-        // Fallback to raw response text if not valid JSON
-      }
-      
-      return res.status(422).json({ success: false, error: parsedError });
+      throw new Error(data.message || "Failed to send email");
     }
   } catch (err: any) {
     console.error("Error in /api/send-otp endpoint:", err);
