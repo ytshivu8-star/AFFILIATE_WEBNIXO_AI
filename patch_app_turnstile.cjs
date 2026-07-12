@@ -3,7 +3,7 @@ let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
 // 1. Rewrite handleAuth
 const oldAuthStart = code.indexOf('const handleAuth = async (e: React.FormEvent) => {');
-const oldAuthEnd = code.indexOf('const handleGoogleSignIn = () => {');
+const oldAuthEnd = code.indexOf('const completePasswordReset = async () => {');
 const oldAuthContent = code.slice(oldAuthStart, oldAuthEnd);
 
 const newAuthContent = `const handleAuth = async (e: React.FormEvent) => {

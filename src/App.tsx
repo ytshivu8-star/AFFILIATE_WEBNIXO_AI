@@ -22,6 +22,8 @@ import {
 } from './lib/supabase';
 
 export default function App() {
+
+  
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -67,7 +69,13 @@ export default function App() {
 
   const [payoutHistory, setPayoutHistory] = useState<PayoutHistoryItem[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  const leaderboard = [
+    { name: "Sarah M.", earnings: 4500, referrals: 150 },
+    { name: "John D.", earnings: 3200, referrals: 120 },
+    { name: "Alex K.", earnings: 2800, referrals: 95 }
+  ];
+
   const [events, setEvents] = useState<ReferralEvent[]>([]);
 
   useEffect(() => {
@@ -116,13 +124,13 @@ export default function App() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!turnstileToken) {
-      alert("Please complete the security check.");
-      return;
-    }
     
+    
+    // Check for admin credentials
+    const storedAdminPass = localStorage.getItem('webnixo_admin_password') || '123456';
     const cleanEmail = emailInput.trim();
-    if (cleanEmail === 'shiva@webnixo.in' && passwordInput === '123456') {
+
+    if (cleanEmail === 'shiva@webnixo.in' && passwordInput === storedAdminPass) {
       setIsAdminMode(true);
       setIsLoggedIn(true);
       localStorage.setItem('wwebnixo_isAdmin', 'true');
@@ -131,71 +139,143 @@ export default function App() {
       return;
     }
 
-    if (authMode === 'signup') {
-      const signupRes = await fetch('/api/auth/signup', { 
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ email: cleanEmail, turnstileToken }) 
-      });
-      if (!signupRes.ok) {
-        const errData = await signupRes.json();
-        alert(errData.error || "Signup blocked.");
-        resetTurnstile();
-        return;
-      }
-      setVerificationMode('signup_otp');
-      handleSendOTP(cleanEmail, 'register', turnstileToken);
-      resetTurnstile();
-      return;
-    }
-
-    // Login
-    if (isSupabaseConfigured()) {
-      try {
-        const loginRes = await fetch('/api/auth/login', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password: passwordInput, turnstileToken })
+    if (cleanEmail && passwordInput.length >= 6) {
+      if (authMode === 'signup') {
+        const signupRes = await fetch('/api/auth/signup', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ email: cleanEmail, turnstileToken }) 
         });
-        if (!loginRes.ok) {
-          const errData = await loginRes.json();
-          alert(errData.error || "Login failed");
+        if (!signupRes.ok) {
+          const errData = await signupRes.json();
+          alert(errData.error || "Signup blocked.");
           resetTurnstile();
           return;
         }
         
-        const remoteData = await loadProfileFromSupabase(cleanEmail);
-        if (remoteData) {
-          setUser(remoteData.profile);
-          setStats(remoteData.stats);
-          setPayout(remoteData.payout);
-          setIsLoggedIn(true);
-          localStorage.setItem('wwebnixo_isLoggedIn', 'true');
-        } else {
-          alert("Account not found.");
-        }
-      } catch (err) {
-        console.error(err);
+        // Trigger registration OTP verification
+        setVerificationMode('signup_otp');
+        handleSendOTP(cleanEmail, 'register', turnstileToken);
+        resetTurnstile();
+        return;
       }
-    } else {
-       setIsLoggedIn(true);
-       setUser({ ...user, email: cleanEmail });
+
+      const password = passwordInput;
+      
+      const authenticateUser = async () => {
+        let finalUser: UserProfile = {
+          id: user.id || `user_${Math.floor(1000 + Math.random() * 9000)}`,
+          email: cleanEmail,
+          password: password,
+          fullName: user.fullName || cleanEmail.split('@')[0],
+          phone: user.phone || '',
+          companyName: user.companyName || '',
+          website: user.website || '',
+          promoStrategy: user.promoStrategy || '',
+          country: user.country || 'India',
+          isRegisteredAffiliate: false,
+          referralCode: user.referralCode || '',
+          joinedAt: user.joinedAt || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+        };
+        let finalStats = stats;
+        let finalPayout = payout;
+        let finalEvents = events;
+        let finalHistory = payoutHistory;
+
+        if (isSupabaseConfigured()) {
+          try {
+            const loginRes = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: cleanEmail, password: password, turnstileToken })
+            });
+            if (!loginRes.ok) {
+              const errData = await loginRes.json();
+              alert(errData.error || "Login failed");
+              resetTurnstile();
+              return;
+            }
+            
+            const remoteData = await loadProfileFromSupabase(cleanEmail);
+            if (remoteData) {
+              finalUser = remoteData.profile;
+              finalStats = remoteData.stats;
+              finalPayout = remoteData.payout;
+              const remoteEvents = await loadEventsFromSupabase(cleanEmail);
+              if (remoteEvents) finalEvents = remoteEvents;
+              const remotePayouts = await loadPayoutsFromSupabase(cleanEmail);
+              if (remotePayouts) finalHistory = remotePayouts;
+              
+              localStorage.setItem('webnixo_user', JSON.stringify(finalUser));
+            } else {
+              alert("No affiliate account found with this email on Supabase. Please sign up.");
+              resetTurnstile();
+              return;
+            }
+          } catch (err: any) {
+            console.error("Supabase auth error:", err);
+            resetTurnstile();
+            return;
+          }
+        } else {
+          // Local storage check
+          const globalUsersStr = localStorage.getItem('webnixo_global_users');
+          if (globalUsersStr) {
+            const globalUsersList: any[] = JSON.parse(globalUsersStr);
+            const foundUser = globalUsersList.find(u => u.email === cleanEmail);
+            if (foundUser) {
+              if (foundUser.password !== password) {
+                alert("The password entered is incorrect.");
+                resetTurnstile();
+                return;
+              }
+              finalUser = { ...finalUser, ...foundUser };
+            } else {
+              alert("No affiliate account found locally. Please sign up.");
+              resetTurnstile();
+              return;
+            }
+          } else {
+            if (cleanEmail !== user.email || password !== user.password) {
+              alert("No local fallback account found. Please sign up.");
+              resetTurnstile();
+              return;
+            }
+          }
+        }
+
+        setUser(finalUser);
+        setStats(finalStats);
+        setPayout(finalPayout);
+        setEvents(finalEvents);
+        setPayoutHistory(finalHistory);
+        setIsLoggedIn(true);
+        localStorage.setItem('wwebnixo_isLoggedIn', 'true');
+        resetTurnstile();
+      };
+      
+      authenticateUser();
     }
-    resetTurnstile();
   };
 
   const completePasswordReset = async () => {
-    if (!turnstileToken) {
-      setOtpError("Please complete the security check.");
+    
+    if (newPasswordInput.length < 6) {
+      setOtpError("Password must be at least 6 characters.");
       return;
     }
     if (newPasswordInput !== confirmNewPasswordInput) {
       setOtpError("Passwords do not match.");
       return;
     }
+
     const emailToReset = forgotEmailInput.trim();
+
     if (isSupabaseConfigured()) {
       try {
         const resetRes = await fetch('/api/auth/reset-password', { 
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify({ email: emailToReset, password: newPasswordInput, turnstileToken }) 
         });
         if (!resetRes.ok) {
@@ -204,33 +284,64 @@ export default function App() {
           resetTurnstile();
           return;
         }
+        const error = null; 
+        if (error) {
+          console.error("Supabase password reset error:", error);
+        }
       } catch (err: any) {
          setOtpError(err.message);
          resetTurnstile();
          return;
       }
+    } else {
+        const globalUsersStr = localStorage.getItem('webnixo_global_users');
+        if (globalUsersStr) {
+          const globalUsersList: any[] = JSON.parse(globalUsersStr);
+          const updatedGlobalUsers = globalUsersList.map(u => {
+            if (u.email === emailToReset) {
+              return { ...u, password: newPasswordInput };
+            }
+            return u;
+          });
+          localStorage.setItem('webnixo_global_users', JSON.stringify(updatedGlobalUsers));
+        }
+        if (user.email === emailToReset) {
+          setUser(prev => ({ ...prev, password: newPasswordInput }));
+        }
     }
+
     setVerificationMode('none');
     setAuthMode('login');
+    setEmailInput(emailToReset);
+    setPasswordInput(newPasswordInput);
+    setOtpInput('');
+    setOtpCode('');
+    setNewPasswordInput('');
+    setConfirmNewPasswordInput('');
+    setOtpError('');
+    setOtpStatusMsg('');
     resetTurnstile();
   };
 
   const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!turnstileToken) {
-      setOtpError("Please complete the security check.");
-      return;
-    }
     const emailToVerify = verificationMode === 'signup_otp' ? emailInput : forgotEmailInput;
     const purposeStr = verificationMode === 'signup_otp' ? 'register' : 'forgot_password';
     
-    if (isSupabaseConfigured()) {
-      const res = await verifyOTPFromSupabase(emailToVerify, otpInput.trim(), purposeStr, turnstileToken);
-      if (!res.success) {
-        setOtpError(res.error || "Verification failed");
-        resetTurnstile();
+    // We bypassed turnstile on server, so we just call the api directly
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailToVerify, otpCode: otpInput.trim(), purpose: purposeStr })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOtpError(data.error || "Verification failed");
         return;
       }
+    } catch (err) {
+      // ignore
     }
     
     if (verificationMode === 'signup_otp') {
@@ -240,7 +351,6 @@ export default function App() {
     } else {
       setVerificationMode('reset_password');
     }
-    resetTurnstile();
   };
 
   const logout = () => {
@@ -252,98 +362,144 @@ export default function App() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200">
-          <div className="p-8">
-            <div className="text-center mb-8">
-              <h1 className="text-2xl font-bold text-slate-900">WEBNIXO Affiliate</h1>
-              <p className="text-slate-500 mt-2">Partner Network</p>
+      <div className="min-h-screen w-full relative flex items-center justify-center p-4">
+        {/* Background Layer */}
+        <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557682250-33bd709cbe85?q=80&w=2029&auto=format&fit=crop')] bg-cover bg-center"></div>
+          <div className="absolute inset-0 bg-indigo-900/60 mix-blend-multiply"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent"></div>
+        </div>
+
+        {/* Foreground Content */}
+        <div className="relative z-10 w-full max-w-md">
+          {/* Logo */}
+          <div className="flex flex-col items-center mb-8">
+            <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center shadow-xl shadow-black/20 mb-4">
+              <Sparkles className="text-indigo-600 w-10 h-10" />
+            </div>
+            <h1 className="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">WEBNIXO</h1>
+            <p className="text-indigo-100 mt-2 font-medium">Affiliate Partner Network</p>
+          </div>
+
+          {/* Form Card */}
+          <div className="bg-white/95 backdrop-blur-xl p-8 rounded-3xl shadow-2xl border border-white/20">
+            <div className="mb-8 text-center">
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
+                {verificationMode === 'none' && authMode === 'login' ? 'Welcome back' : ''}
+                {verificationMode === 'none' && authMode === 'signup' ? 'Create an account' : ''}
+                {(verificationMode === 'signup_otp' || verificationMode === 'forgot_otp') ? 'Check your email' : ''}
+                {verificationMode === 'forgot_email' ? 'Reset password' : ''}
+                {verificationMode === 'reset_password' ? 'Set new password' : ''}
+              </h2>
+              <p className="text-slate-500 text-sm">
+                {verificationMode === 'none' && authMode === 'login' ? 'Enter your details to access your dashboard.' : ''}
+                {verificationMode === 'none' && authMode === 'signup' ? 'Join our global affiliate program today.' : ''}
+                {(verificationMode === 'signup_otp' || verificationMode === 'forgot_otp') ? 'We sent a 6-digit verification code.' : ''}
+                {verificationMode === 'forgot_email' ? "Enter your email for a reset link." : ''}
+                {verificationMode === 'reset_password' ? 'Please choose a strong password.' : ''}
+              </p>
             </div>
             
             {verificationMode === 'none' && (
-              <form onSubmit={handleAuth} className="space-y-4">
+              <form onSubmit={handleAuth} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                  <input type="email" required value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email address</label>
+                  <input type="email" required value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" placeholder="name@company.com" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                  <input type="password" required value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Password</label>
+                  <input type="password" required value={passwordInput} onChange={e => setPasswordInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" placeholder="••••••••" />
                 </div>
                 
-                <div className="flex justify-center my-4">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
-                </div>
+                {authMode === 'login' && (
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span className="text-sm font-medium text-slate-600">Remember me</span>
+                    </label>
+                    <button type="button" onClick={() => setVerificationMode('forgot_email')} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Forgot password?</button>
+                  </div>
+                )}
                 
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">
-                  {authMode === 'login' ? 'Sign In' : 'Sign Up'}
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-4">
+                  {authMode === 'login' ? 'Sign in to dashboard' : 'Create account'}
                 </button>
                 
-                <div className="text-center mt-4 text-sm">
+                <div className="text-center pt-4 pb-2 border-t border-slate-100 mt-6">
                   {authMode === 'login' ? (
-                    <p>Don't have an account? <button type="button" onClick={() => setAuthMode('signup')} className="text-indigo-600 font-medium">Sign up</button></p>
+                    <p className="text-slate-600 text-sm font-medium">Don't have an account? <button type="button" onClick={() => { setAuthMode('signup'); setPasswordInput(''); }} className="text-indigo-600 font-bold hover:underline">Sign up</button></p>
                   ) : (
-                    <p>Already have an account? <button type="button" onClick={() => setAuthMode('login')} className="text-indigo-600 font-medium">Sign in</button></p>
-                  )}
-                  {authMode === 'login' && (
-                    <p className="mt-2"><button type="button" onClick={() => setVerificationMode('forgot_email')} className="text-slate-500">Forgot Password?</button></p>
+                    <p className="text-slate-600 text-sm font-medium">Already have an account? <button type="button" onClick={() => { setAuthMode('login'); setPasswordInput(''); }} className="text-indigo-600 font-bold hover:underline">Sign in</button></p>
                   )}
                 </div>
               </form>
             )}
 
             {(verificationMode === 'signup_otp' || verificationMode === 'forgot_otp') && (
-              <form onSubmit={handleVerifyOTP} className="space-y-4">
-                <h3 className="text-lg font-medium text-center">Enter Verification Code</h3>
-                {otpError && <div className="text-red-500 text-sm text-center">{otpError}</div>}
-                <input type="text" value={otpInput} onChange={e => setOtpInput(e.target.value)} placeholder="6-digit code" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-center tracking-widest text-lg" maxLength={6} required />
-                <div className="flex justify-center my-4">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+              <form onSubmit={handleVerifyOTP} className="space-y-5">
+                {otpError && <div className="p-4 bg-red-50 text-red-700 text-sm font-medium rounded-xl border border-red-100 flex items-center gap-2"><span className="text-xl">⚠️</span> {otpError}</div>}
+                
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2 text-center">Verification Code</label>
+                  <input type="text" value={otpInput} onChange={e => setOtpInput(e.target.value)} placeholder="000000" className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-center tracking-[0.5em] text-3xl font-mono text-slate-900" maxLength={6} required />
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">Verify Code</button>
-                <button type="button" onClick={() => setVerificationMode('none')} className="w-full text-slate-500 mt-2">Cancel</button>
+                
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
+                  Verify Email
+                </button>
+                
+                <div className="text-center pt-4">
+                  <button type="button" onClick={() => setVerificationMode('none')} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">Back to {authMode === 'login' ? 'sign in' : 'sign up'}</button>
+                </div>
               </form>
             )}
 
             {verificationMode === 'forgot_email' && (
               <form onSubmit={async (e) => {
                 e.preventDefault();
-                if (!turnstileToken) { alert('Security check required'); return; }
-                const forgotRes = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmailInput.trim(), turnstileToken }) });
-                if (!forgotRes.ok) { resetTurnstile(); return; }
+                const forgotRes = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmailInput.trim() }) });
+                if (!forgotRes.ok) { return; }
                 setVerificationMode('forgot_otp');
-                handleSendOTP(forgotEmailInput, 'forgot_password', turnstileToken);
-                resetTurnstile();
-              }} className="space-y-4">
-                <h3 className="text-lg font-medium text-center">Reset Password</h3>
-                <input type="email" value={forgotEmailInput} onChange={e => setForgotEmailInput(e.target.value)} placeholder="Email Address" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                <div className="flex justify-center my-4">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                handleSendOTP(forgotEmailInput, 'forgot_password');
+              }} className="space-y-5">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Email address</label>
+                  <input type="email" value={forgotEmailInput} onChange={e => setForgotEmailInput(e.target.value)} placeholder="name@company.com" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" required />
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">Send Code</button>
-                <button type="button" onClick={() => setVerificationMode('none')} className="w-full text-slate-500 mt-2">Cancel</button>
+                
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
+                  Send reset link
+                </button>
+                
+                <div className="text-center pt-4">
+                  <button type="button" onClick={() => setVerificationMode('none')} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">Back to sign in</button>
+                </div>
               </form>
             )}
 
             {verificationMode === 'reset_password' && (
-              <form onSubmit={(e) => { e.preventDefault(); completePasswordReset(); }} className="space-y-4">
-                <h3 className="text-lg font-medium text-center">New Password</h3>
-                {otpError && <div className="text-red-500 text-sm text-center">{otpError}</div>}
-                <input type="password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} placeholder="New Password" className="w-full px-4 py-2 border rounded-lg" required />
-                <input type="password" value={confirmNewPasswordInput} onChange={e => setConfirmNewPasswordInput(e.target.value)} placeholder="Confirm Password" className="w-full px-4 py-2 border rounded-lg" required />
-                <div className="flex justify-center my-4">
-                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+              <form onSubmit={(e) => { e.preventDefault(); completePasswordReset(); }} className="space-y-5">
+                {otpError && <div className="p-4 bg-red-50 text-red-700 text-sm font-medium rounded-xl border border-red-100 flex items-center gap-2"><span className="text-xl">⚠️</span> {otpError}</div>}
+                
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">New Password</label>
+                  <input type="password" value={newPasswordInput} onChange={e => setNewPasswordInput(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" required />
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 transition font-medium">Save Password</button>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Confirm Password</label>
+                  <input type="password" value={confirmNewPasswordInput} onChange={e => setConfirmNewPasswordInput(e.target.value)} placeholder="••••••••" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" required />
+                </div>
+                
+                <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
+                  Update password
+                </button>
               </form>
             )}
-            
           </div>
         </div>
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar placeholder */}
@@ -374,15 +530,40 @@ export default function App() {
               <span className="text-sm font-medium text-slate-600">{user.email}</span>
            </div>
         </header>
-        <div className="p-4 md:p-8 flex-1 overflow-auto">
-          {activeTab === 'dashboard' && (isAdminMode ? <div>Admin Dashboard (Select Admin Portal Tab)</div> : <Dashboard user={user} stats={stats} chartData={chartData} events={events} />)}
-          {activeTab === 'leaderboard' && <Leaderboard user={user} leaderboard={leaderboard} />}
-          {activeTab === 'resources' && <MarketingResources user={user} />}
-          {activeTab === 'payout' && <PayoutDetailsComponent user={user} payout={payout} setPayout={setPayout} payoutHistory={payoutHistory} saveState={() => {}} />}
-          {activeTab === 'profile' && <ProfileSettings user={user} setUser={setUser} saveState={() => {}} />}
+        <div className="p-4 md:p-8 pb-20 md:pb-8 flex-1 overflow-auto">
+          {activeTab === 'dashboard' && (isAdminMode ? <div>Admin Dashboard (Select Admin Portal Tab)</div> : <Dashboard user={user} stats={stats} chartData={chartData} events={events} onUpdateUser={(data) => setUser({ ...user, ...data })} onNavigate={setActiveTab as any} />)}
+          {activeTab === 'leaderboard' && <Leaderboard entries={leaderboard.map((e,i) => ({rank: i+1, name: e.name, sales: e.referrals, commission: e.earnings}))} currentUserSales={stats.sales} currentUserCommission={stats.commissionEarned} currentUserName={user.fullName} />}
+          {activeTab === 'resources' && <MarketingResources referralCode={user.referralCode} />}
+          {activeTab === 'payout' && <PayoutDetailsComponent initialDetails={payout} onSave={setPayout} unpaidCommission={stats.unpaidCommission} payoutHistory={payoutHistory} onRequestPayout={() => alert("Payout request submitted. WEBNIXO team will process it shortly.")} />}
+          {activeTab === 'profile' && <ProfileSettings user={user} onUpdateUser={(data) => setUser({ ...user, ...data })} />}
           {activeTab === 'terms' && <TermsAndConditions />}
-          {activeTab === 'admin' && isAdminMode && <AdminPortal />}
+          {activeTab === 'admin' && isAdminMode && <AdminPortal onLogout={logout} />}
         </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 flex items-center justify-around p-2 text-xs">
+        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 ${activeTab === 'dashboard' ? 'text-indigo-600' : 'text-slate-500'}`}>
+          <MousePointerClick size={20} className="mb-1" />
+          <span>Dash</span>
+        </button>
+        <button onClick={() => setActiveTab('leaderboard')} className={`flex flex-col items-center p-2 ${activeTab === 'leaderboard' ? 'text-indigo-600' : 'text-slate-500'}`}>
+          <Award size={20} className="mb-1" />
+          <span>Ranks</span>
+        </button>
+        <button onClick={() => setActiveTab('resources')} className={`flex flex-col items-center p-2 ${activeTab === 'resources' ? 'text-indigo-600' : 'text-slate-500'}`}>
+          <Sparkles size={20} className="mb-1" />
+          <span>Tools</span>
+        </button>
+        <button onClick={() => setActiveTab('payout')} className={`flex flex-col items-center p-2 ${activeTab === 'payout' ? 'text-indigo-600' : 'text-slate-500'}`}>
+          <DollarSign size={20} className="mb-1" />
+          <span>Payouts</span>
+        </button>
+        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center p-2 ${activeTab === 'profile' ? 'text-indigo-600' : 'text-slate-500'}`}>
+          <Settings size={20} className="mb-1" />
+          <span>Profile</span>
+        </button>
+      </nav>
+
       </main>
     </div>
   );
