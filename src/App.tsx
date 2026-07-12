@@ -124,6 +124,7 @@ export default function App() {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setOtpError('');
     
     
     // Check for admin credentials
@@ -139,6 +140,14 @@ export default function App() {
       return;
     }
 
+    if (!cleanEmail) {
+      setOtpError("Email is required.");
+      return;
+    }
+    if (passwordInput.length < 6) {
+      setOtpError("Password must be at least 6 characters.");
+      return;
+    }
     if (cleanEmail && passwordInput.length >= 6) {
       if (authMode === 'signup') {
         const signupRes = await fetch('/api/auth/signup', { 
@@ -148,7 +157,7 @@ export default function App() {
         });
         if (!signupRes.ok) {
           const errData = await signupRes.json();
-          alert(errData.error || "Signup blocked.");
+          setOtpError(errData.error || "Signup blocked.");
           resetTurnstile();
           return;
         }
@@ -191,7 +200,7 @@ export default function App() {
             });
             if (!loginRes.ok) {
               const errData = await loginRes.json();
-              alert(errData.error || "Login failed");
+              setOtpError(errData.error || "Login failed");
               resetTurnstile();
               return;
             }
@@ -208,7 +217,7 @@ export default function App() {
               
               localStorage.setItem('webnixo_user', JSON.stringify(finalUser));
             } else {
-              alert("No affiliate account found with this email on Supabase. Please sign up.");
+              setOtpError("No affiliate account found with this email on Supabase. Please sign up.");
               resetTurnstile();
               return;
             }
@@ -225,19 +234,19 @@ export default function App() {
             const foundUser = globalUsersList.find(u => u.email === cleanEmail);
             if (foundUser) {
               if (foundUser.password !== password) {
-                alert("The password entered is incorrect.");
+                setOtpError("The password entered is incorrect.");
                 resetTurnstile();
                 return;
               }
               finalUser = { ...finalUser, ...foundUser };
             } else {
-              alert("No affiliate account found locally. Please sign up.");
+              setOtpError("No affiliate account found locally. Please sign up.");
               resetTurnstile();
               return;
             }
           } else {
             if (cleanEmail !== user.email || password !== user.password) {
-              alert("No local fallback account found. Please sign up.");
+              setOtpError("No local fallback account found. Please sign up.");
               resetTurnstile();
               return;
             }
@@ -402,6 +411,7 @@ export default function App() {
             
             {verificationMode === 'none' && (
               <form onSubmit={handleAuth} className="space-y-5">
+                {otpError && <div className="p-4 bg-red-50 text-red-700 text-sm font-medium rounded-xl border border-red-100 flex items-center gap-2"><span className="text-xl">⚠️</span> {otpError}</div>}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Email address</label>
                   <input type="email" required value={emailInput} onChange={e => setEmailInput(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" placeholder="name@company.com" />
@@ -424,6 +434,9 @@ export default function App() {
                 <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-4">
                   {authMode === 'login' ? 'Sign in to dashboard' : 'Create account'}
                 </button>
+                <div className="mt-4 flex justify-center">
+                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                </div>
                 
                 <div className="text-center pt-4 pb-2 border-t border-slate-100 mt-6">
                   {authMode === 'login' ? (
@@ -447,6 +460,9 @@ export default function App() {
                 <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
                   Verify Email
                 </button>
+                <div className="mt-4 flex justify-center">
+                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                </div>
                 
                 <div className="text-center pt-4">
                   <button type="button" onClick={() => setVerificationMode('none')} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">Back to {authMode === 'login' ? 'sign in' : 'sign up'}</button>
@@ -457,11 +473,14 @@ export default function App() {
             {verificationMode === 'forgot_email' && (
               <form onSubmit={async (e) => {
                 e.preventDefault();
+                setOtpError('');
                 const forgotRes = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: forgotEmailInput.trim() }) });
-                if (!forgotRes.ok) { return; }
+                if (!forgotRes.ok) { const errData = await forgotRes.json(); setOtpError(errData.error || "Request blocked"); return; }
+
                 setVerificationMode('forgot_otp');
                 handleSendOTP(forgotEmailInput, 'forgot_password');
               }} className="space-y-5">
+                {otpError && <div className="p-4 bg-red-50 text-red-700 text-sm font-medium rounded-xl border border-red-100 flex items-center gap-2"><span className="text-xl">⚠️</span> {otpError}</div>}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Email address</label>
                   <input type="email" value={forgotEmailInput} onChange={e => setForgotEmailInput(e.target.value)} placeholder="name@company.com" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all text-slate-900 placeholder:text-slate-400" required />
@@ -470,6 +489,9 @@ export default function App() {
                 <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
                   Send reset link
                 </button>
+                <div className="mt-4 flex justify-center">
+                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                </div>
                 
                 <div className="text-center pt-4">
                   <button type="button" onClick={() => setVerificationMode('none')} className="text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors">Back to sign in</button>
@@ -493,6 +515,9 @@ export default function App() {
                 <button type="submit" className="w-full bg-indigo-600 text-white py-3.5 rounded-xl hover:bg-indigo-700 transition-colors font-semibold shadow-lg shadow-indigo-600/20 text-base mt-2">
                   Update password
                 </button>
+                <div className="mt-4 flex justify-center">
+                  <Turnstile siteKey="0x4AAAAAAD0Yhl8ycnaCVDbt" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                </div>
               </form>
             )}
           </div>
