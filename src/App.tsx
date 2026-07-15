@@ -194,11 +194,14 @@ export default function App() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ email: cleanEmail, password: password, turnstileToken })
             });
+            const dataRes = await loginRes.json();
             if (!loginRes.ok) {
-              const errData = await loginRes.json();
-              setOtpError(errData.error || "Login failed");
+              setOtpError(dataRes.error || "Login failed");
               resetTurnstile();
               return;
+            }
+            if (dataRes.session && isSupabaseConfigured()) {
+              await supabase.auth.setSession({ access_token: dataRes.session.access_token, refresh_token: dataRes.session.refresh_token });
             }
             
             const remoteData = await loadProfileFromSupabase(cleanEmail);
@@ -337,12 +340,15 @@ export default function App() {
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailToVerify, otpCode: otpInput.trim(), purpose: purposeStr })
+        body: JSON.stringify({ email: emailToVerify, otpCode: otpInput.trim(), purpose: purposeStr, password: passwordInput })
       });
       const data = await res.json();
       if (!res.ok) {
         setOtpError(data.error || "Verification failed");
         return;
+      }
+      if (data.session && isSupabaseConfigured()) {
+        await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
       }
     } catch (err) {
       // ignore

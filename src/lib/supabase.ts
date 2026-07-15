@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_profiles_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_profiles_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to profiles" ON public.webnixo_profiles_affilate;
-CREATE POLICY "Public full access to profiles" ON public.webnixo_profiles_affilate FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for profiles" ON public.webnixo_profiles_affilate FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
 
 
 -- 2. Create Events Affiliate Table (webnixo_events_affilate)

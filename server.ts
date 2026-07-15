@@ -55,7 +55,10 @@ app.get("/api/resend-status", (req, res) => {
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const supabaseServiceKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseKey;
+
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } }) : null;
+const supabaseAdmin = supabaseUrl && supabaseServiceKey ? createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } }) : null;
 
 
 function logSecurityEvent(req, endpoint, email, status, reason) {
@@ -164,18 +167,30 @@ app.post("/api/auth/login", async (req, res) => {
   const rl = await checkRateLimit("login", ip, 5, 15 * 60 * 1000);
   if (!rl.allowed) { logSecurityEvent(req, '/api/auth/login', email, 'Blocked', 'Rate limit exceeded (5/15m)'); return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." }); }
 
-  if (!supabase) return res.json({ success: true });
+  if (!supabaseAdmin) return res.json({ success: true });
 
-  const { data, error } = await supabase.from('webnixo_profiles_affilate').select('*').eq('email', email).maybeSingle();
+  const cleanEmail = email.toLowerCase().trim();
+  const { data, error } = await supabaseAdmin.from('webnixo_profiles_affilate').select('*').eq('email', cleanEmail).maybeSingle();
   
   if (error || !data || data.password !== password) {
-    logSecurityEvent(req, '/api/auth/login', email, 'Blocked', 'Invalid credentials');
+    logSecurityEvent(req, '/api/auth/login', cleanEmail, 'Blocked', 'Invalid credentials');
     return res.status(401).json({ error: "Invalid credentials." });
   }
 
-  logSecurityEvent(req, '/api/auth/login', email, 'Allowed', 'Success');
+  // Ensure user is migrated to auth.users
+  let authUser = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+  if (authUser.error) {
+     const { error: createError } = await supabaseAdmin.auth.admin.createUser({ email: cleanEmail, password, email_confirm: true });
+     if (!createError) {
+        authUser = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+     } else {
+        return res.status(500).json({ error: "Failed to initialize secure session." });
+     }
+  }
+
+  logSecurityEvent(req, '/api/auth/login', cleanEmail, 'Allowed', 'Success');
   await clearRateLimit("login", ip);
-  return res.json({ success: true });
+  return res.json({ success: true, session: authUser.data.session });
 });
 
 app.post("/api/auth/signup", async (req, res) => {
@@ -203,20 +218,20 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   }
   logTurnstileEvent(req, '/api/auth/verify-otp', true);
   
-  const { email, otpCode, purpose } = req.body;
+  const { email, otpCode, purpose, password } = req.body;
   const cleanEmail = email.toLowerCase().trim();
-  const inputHash = crypto.createHash('sha256').update(otpCode.trim()).digest('hex');
+  const inputHash = require('crypto').createHash('sha256').update(otpCode.trim()).digest('hex');
 
   const rl = await checkRateLimit(`verify_otp`, cleanEmail, 5, 15 * 60 * 1000);
   if (!rl.allowed) {
-    if (supabase) await supabase.from('webnixo_otps_affilate').delete().eq('email', cleanEmail).eq('purpose', purpose);
+    if (supabaseAdmin) await supabaseAdmin.from('webnixo_otps_affilate').delete().eq('email', cleanEmail).eq('purpose', purpose);
     else otpStore.delete(`${cleanEmail}_${purpose}`);
     logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'Rate limit exceeded (5/15m) - OTP invalidated');
     return res.status(429).json({ error: "Too many incorrect attempts. OTP invalidated. Request a new one." });
   }
 
-  if (supabase) {
-    const { data, error } = await supabase.from('webnixo_otps_affilate')
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.from('webnixo_otps_affilate')
       .select('*').eq('email', cleanEmail).eq('purpose', purpose).maybeSingle();
 
     if (error || !data) {
@@ -226,7 +241,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
     const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : new Date(data.created_at).getTime() + 5 * 60 * 1000;
     if (expiresAt < Date.now()) {
-      await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
+      await supabaseAdmin.from('webnixo_otps_affilate').delete().eq('id', data.id);
       logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Blocked', 'OTP expired'); 
       return res.status(400).json({ error: "OTP expired. Please request a new one." });
     }
@@ -236,7 +251,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
       return res.status(400).json({ error: "Incorrect security code." });
     }
 
-    await supabase.from('webnixo_otps_affilate').delete().eq('id', data.id);
+    await supabaseAdmin.from('webnixo_otps_affilate').delete().eq('id', data.id);
   } else {
     const key = `${cleanEmail}_${purpose}`;
     const record = otpStore.get(key);
@@ -268,7 +283,20 @@ app.post("/api/auth/verify-otp", async (req, res) => {
 
   await clearRateLimit(`verify_otp`, cleanEmail);
   logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Allowed', 'Success');
-  return res.json({ success: true });
+
+  let session = null;
+  if (purpose === 'register' && password && supabaseAdmin) {
+    let authUser = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+    if (authUser.error) {
+       await supabaseAdmin.auth.admin.createUser({ email: cleanEmail, password, email_confirm: true }).catch(() => {});
+       authUser = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+    }
+    if (!authUser.error) {
+      session = authUser.data.session;
+    }
+  }
+
+  return res.json({ success: true, session });
 });
 app.post("/api/auth/reset-password", async (req, res) => {
   const ip = getIP(req);
