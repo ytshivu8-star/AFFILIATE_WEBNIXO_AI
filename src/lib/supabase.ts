@@ -208,7 +208,7 @@ INSERT INTO public.webnixo_settings_affilate (key, value) VALUES
 ('comm_199', '39.80'),
 ('comm_499', '99.80'),
 ('comm_999', '199.80'),
-('admin_password', '123456')
+('admin_password', 'CHANGE_ME_IMMEDIATELY')
 ON CONFLICT (key) DO NOTHING;
 
 

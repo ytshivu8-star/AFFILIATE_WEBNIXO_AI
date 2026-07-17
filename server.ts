@@ -406,7 +406,7 @@ app.post("/api/send-otp", async (req, res) => {
       });
     }
 
-    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
     rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
     let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
@@ -415,7 +415,7 @@ app.post("/api/send-otp", async (req, res) => {
     let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
     if (rawFromEmail) {
       fromEmail = rawFromEmail;
-    } else if (rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj") {
+    } else if (rawApiKey) {
       fromEmail = "WEBNIXO AI <info@webnixo.in>";
     }
 

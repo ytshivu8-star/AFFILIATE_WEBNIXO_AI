@@ -124,7 +124,7 @@ export default function App() {
     
     
     // Check for admin credentials
-    const storedAdminPass = localStorage.getItem('webnixo_admin_password') || '123456';
+    const storedAdminPass = localStorage.getItem('webnixo_admin_password') || (import.meta as any).env.VITE_DEFAULT_ADMIN_PASSWORD;
     const cleanEmail = emailInput.trim();
 
     if (cleanEmail === 'shiva@webnixo.in' && passwordInput === storedAdminPass) {
@@ -436,7 +436,7 @@ export default function App() {
                   {authMode === 'login' ? 'Sign in to dashboard' : 'Create account'}
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey={(import.meta as any).env.VITE_TURNSTILE_SITE_KEY || ''} onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4 pb-2 border-t border-slate-100 mt-6">
@@ -462,7 +462,7 @@ export default function App() {
                   Verify Email
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey={(import.meta as any).env.VITE_TURNSTILE_SITE_KEY || ''} onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4">
@@ -491,7 +491,7 @@ export default function App() {
                   Send reset link
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey={(import.meta as any).env.VITE_TURNSTILE_SITE_KEY || ''} onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
                 
                 <div className="text-center pt-4">
@@ -517,7 +517,7 @@ export default function App() {
                   Update password
                 </button>
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="1x00000000000000000000AA" onSuccess={setTurnstileToken} ref={turnstileRef} />
+                  <Turnstile siteKey={(import.meta as any).env.VITE_TURNSTILE_SITE_KEY || ''} onSuccess={setTurnstileToken} ref={turnstileRef} />
                 </div>
               </form>
             )}
