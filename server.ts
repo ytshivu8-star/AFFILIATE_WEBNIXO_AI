@@ -18,13 +18,13 @@ app.use(express.json());
 
 // API: Check Resend connection and configuration status
 app.get("/api/resend-status", (req, res) => {
-  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
   rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
   let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
   rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
-  const isCustomKey = rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj" && rawApiKey.length > 10;
+  const isCustomKey = rawApiKey !== "" && rawApiKey.length > 10;
   
   let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
   if (rawFromEmail) {
@@ -81,6 +81,14 @@ const getIP = (req) => {
   return (Array.isArray(forwarded) ? forwarded[0] : forwarded) || req.socket?.remoteAddress || '127.0.0.1';
 };
 
+
+
+const isValidEmail = (email) => {
+  return typeof email === 'string' && email.length > 5 && email.length < 255 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+const isValidPassword = (pwd) => {
+  return typeof pwd === 'string' && pwd.length >= 6 && pwd.length <= 100;
+};
 
 const verifyTurnstile = async (token, ip) => {
   return { success: true };
@@ -162,7 +170,9 @@ app.post("/api/auth/login", async (req, res) => {
   logTurnstileEvent(req, '/api/auth/login', true);
   
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Missing fields" });
+  if (!isValidEmail(email) || !isValidPassword(password)) {
+    return res.status(400).json({ error: "Invalid email or password format" });
+  }
 
   const rl = await checkRateLimit("login", ip, 5, 15 * 60 * 1000);
   if (!rl.allowed) { logSecurityEvent(req, '/api/auth/login', email, 'Blocked', 'Rate limit exceeded (5/15m)'); return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." }); }
@@ -202,6 +212,8 @@ app.post("/api/auth/signup", async (req, res) => {
   }
   logTurnstileEvent(req, '/api/auth/signup', true);
   
+  const { email } = req.body;
+  if (email && !isValidEmail(email)) return res.status(400).json({ error: "Invalid email format" });
   const rl = await checkRateLimit("signup", ip, 3, 60 * 60 * 1000);
   if (!rl.allowed) { logSecurityEvent(req, '/api/auth/signup', req.body.email, 'Blocked', 'Rate limit exceeded (3/1h)'); return res.status(429).json({ error: "Too many signup attempts. Please try again later." }); }
   
@@ -219,6 +231,12 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   logTurnstileEvent(req, '/api/auth/verify-otp', true);
   
   const { email, otpCode, purpose, password } = req.body;
+  if (!isValidEmail(email) || typeof otpCode !== 'string' || otpCode.length !== 6 || typeof purpose !== 'string') {
+    return res.status(400).json({ error: "Invalid request payload" });
+  }
+  if (password && !isValidPassword(password)) {
+    return res.status(400).json({ error: "Invalid password format" });
+  }
   const cleanEmail = email.toLowerCase().trim();
   const inputHash = require('crypto').createHash('sha256').update(otpCode.trim()).digest('hex');
 
@@ -299,22 +317,31 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   return res.json({ success: true, session });
 });
 app.post("/api/auth/reset-password", async (req, res) => {
-  const ip = getIP(req);
-  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
-  if (!turnstileData.success) {
-    logTurnstileEvent(req, '/api/auth/reset-password', false, turnstileData['error-codes']?.join(', '));
-    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  try {
+    const ip = getIP(req);
+    const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+    if (!turnstileData.success) {
+      logTurnstileEvent(req, '/api/auth/reset-password', false, turnstileData['error-codes']?.join(', '));
+      return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+    }
+    logTurnstileEvent(req, '/api/auth/reset-password', true);
+
+    const { email, password } = req.body;
+    if (!isValidEmail(email) || !isValidPassword(password)) {
+      return res.status(400).json({ error: "Invalid email or password format" });
+    }
+
+    const rl = await checkRateLimit("reset_pwd", ip, 3, 60 * 60 * 1000);
+    if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
+
+    if (supabaseAdmin) {
+      await supabaseAdmin.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
+    }
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err.message);
+    return res.status(500).json({ error: "Internal server error" });
   }
-  logTurnstileEvent(req, '/api/auth/reset-password', true);
-  
-  const { email, password } = req.body;
-  const rl = await checkRateLimit("reset_pw", ip, 5, 60 * 60 * 1000);
-  if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
-  
-  if (supabase && email && password) {
-    await supabaseAdmin.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
-  }
-  return res.json({ success: true });
 });
 
 app.post("/api/auth/google-callback", async (req, res) => {
@@ -332,20 +359,27 @@ app.post("/api/auth/google-callback", async (req, res) => {
 });
 
 app.post("/api/auth/forgot-password", async (req, res) => {
-  const ip = getIP(req);
-  const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
-  if (!turnstileData.success) {
-    logTurnstileEvent(req, '/api/auth/forgot-password', false, turnstileData['error-codes']?.join(', '));
-    return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+  try {
+    const ip = getIP(req);
+    const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
+    if (!turnstileData.success) {
+      logTurnstileEvent(req, '/api/auth/forgot-password', false, turnstileData['error-codes']?.join(', '));
+      return res.status(403).json({ error: "Turnstile verification failed. Please try again." });
+    }
+    logTurnstileEvent(req, '/api/auth/forgot-password', true);
+
+    const { email } = req.body;
+    if (!isValidEmail(email)) return res.status(400).json({ error: "Invalid email format" });
+
+    const rl = await checkRateLimit("forgot_pwd", ip, 3, 60 * 60 * 1000);
+    if (!rl.allowed) return res.status(429).json({ error: "Too many attempts. Please try again later." });
+
+    // Always return success to prevent email enumeration
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error(err.message);
+    return res.status(500).json({ error: "Internal server error" });
   }
-  logTurnstileEvent(req, '/api/auth/forgot-password', true);
-  
-  const { email } = req.body;
-  const rl = await checkRateLimit(`forgot_pw`, email, 3, 60 * 60 * 1000);
-  if (!rl.allowed) {
-    return res.json({ success: true, message: "If an account exists, we've sent reset instructions." });
-  }
-  return res.json({ success: true });
 });
 
 
@@ -450,8 +484,8 @@ app.post("/api/send-otp", async (req, res) => {
       throw new Error(data.message || "Failed to send email");
     }
   } catch (err: any) {
-    console.error("Error in /api/send-otp endpoint:", err);
-    return res.status(500).json({ success: false, error: err?.message || "Internal server error" });
+    console.error("Error in /api/send-otp endpoint:", err.message || err);
+    return res.status(500).json({ success: false, error: "Internal server error" });
   }
 });
 
@@ -481,31 +515,35 @@ const requireAdmin = async (req, res, next) => {
 app.post("/api/user/profile", async (req, res) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: "Missing authorization header" });
-  if (!supabaseAdmin) return res.status(500).json({ error: "Supabase Admin not configured" });
+  if (!supabaseAdmin) return res.status(500).json({ error: "Internal server error" });
 
   const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !user) return res.status(401).json({ error: "Invalid token" });
 
   const { profile, payoutDetails } = req.body;
+  if (!profile || typeof profile !== 'object' || !payoutDetails || typeof payoutDetails !== 'object') {
+     return res.status(400).json({ error: "Invalid payload" });
+  }
+
   if (profile.email !== user.email) {
     return res.status(403).json({ error: "Cannot modify another user's profile" });
   }
 
   // Sanitize updates to prevent tampering with sensitive fields like stats or is_admin
   const updateData = {
-    full_name: profile.fullName,
-    phone: profile.phone,
-    company_name: profile.companyName,
-    website: profile.website,
-    promo_strategy: profile.promoStrategy,
-    country: profile.country,
-    custom_coupon_code: profile.customCouponCode,
-    payout_details: payoutDetails,
+    full_name: typeof profile.fullName === 'string' ? profile.fullName.slice(0, 100) : '',
+    phone: typeof profile.phone === 'string' ? profile.phone.slice(0, 20) : '',
+    company_name: typeof profile.companyName === 'string' ? profile.companyName.slice(0, 100) : '',
+    website: typeof profile.website === 'string' ? profile.website.slice(0, 200) : '',
+    promo_strategy: typeof profile.promoStrategy === 'string' ? profile.promoStrategy.slice(0, 1000) : '',
+    country: typeof profile.country === 'string' ? profile.country.slice(0, 50) : '',
+    custom_coupon_code: typeof profile.customCouponCode === 'string' ? profile.customCouponCode.slice(0, 50) : '',
+    payout_details: typeof payoutDetails === 'object' ? payoutDetails : {},
     updated_at: new Date().toISOString()
   };
 
   const { error } = await supabaseAdmin.from('webnixo_profiles_affilate').update(updateData).eq('email', user.email);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   
   res.json({ success: true });
 });
@@ -513,42 +551,70 @@ app.post("/api/user/profile", async (req, res) => {
 
 app.post("/api/admin/settings/sync", requireAdmin, async (req, res) => {
   const { upserts } = req.body;
+  if (!Array.isArray(upserts) || upserts.length > 50) return res.status(400).json({ error: "Invalid payload" });
   const { error } = await supabaseAdmin.from('webnixo_settings_affilate').upsert(upserts);
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ success: true });
 });
 
 app.get("/api/admin/profiles", requireAdmin, async (req, res) => {
   const { data, error } = await supabaseAdmin.from('webnixo_profiles_affilate').select('*').order('joined_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ profiles: data });
 });
 
 
 app.post("/api/admin/payouts/sync", requireAdmin, async (req, res) => {
   const { email, payouts } = req.body;
-  const { error } = await supabaseAdmin.from('webnixo_payout_history_affilate').upsert(payouts);
-  if (error) return res.status(500).json({ error: error.message });
+  if (!isValidEmail(email) || !Array.isArray(payouts) || payouts.length > 50) return res.status(400).json({ error: "Invalid payload" });
+  
+  const sanitizedPayouts = payouts.map(p => ({
+     id: String(p.id).slice(0, 50),
+     user_email: email,
+     amount: Number(p.amount),
+     date: String(p.date).slice(0, 50),
+     method: String(p.method).slice(0, 50),
+     destination: String(p.destination).slice(0, 100),
+     status: String(p.status).slice(0, 50),
+     transaction_id: p.transaction_id ? String(p.transaction_id).slice(0, 100) : null
+  }));
+
+  const { error } = await supabaseAdmin.from('webnixo_payout_history_affilate').upsert(sanitizedPayouts);
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ success: true });
 });
 
 app.get("/api/admin/payouts", requireAdmin, async (req, res) => {
   const { data, error } = await supabaseAdmin.from('webnixo_payout_history_affilate').select('*').order('created_at', { ascending: false });
-  if (error) return res.status(500).json({ error: error.message });
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ payouts: data });
 });
 
 app.post("/api/admin/subscription-plans", requireAdmin, async (req, res) => {
   const plan = req.body;
-  const { error } = await supabaseAdmin.from('subscription_plans').upsert(plan);
-  if (error) return res.status(500).json({ error: error.message });
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return res.status(400).json({ error: "Invalid payload" });
+  const allowedKeys = ['id', 'name', 'cost', 'features', 'popular'];
+  const sanitizedPlan = {};
+  for (const key of allowedKeys) {
+    if (plan[key] !== undefined) sanitizedPlan[key] = plan[key];
+  }
+  const { error } = await supabaseAdmin.from('subscription_plans').upsert(sanitizedPlan);
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ success: true });
 });
 
 app.post("/api/admin/profiles/update", requireAdmin, async (req, res) => {
   const { email, data } = req.body;
-  const { error } = await supabaseAdmin.from('webnixo_profiles_affilate').update(data).eq('email', email);
-  if (error) return res.status(500).json({ error: error.message });
+  if (!isValidEmail(email) || !data || typeof data !== 'object' || Array.isArray(data)) return res.status(400).json({ error: "Invalid payload" });
+  
+  const allowedKeys = ['full_name', 'phone', 'company_name', 'website', 'promo_strategy', 'country', 'custom_coupon_code', 'payout_details', 'stats', 'updated_at', 'is_admin'];
+  const updateData = {};
+  for (const key of allowedKeys) {
+    if (data[key] !== undefined) updateData[key] = data[key];
+  }
+  
+  const { error } = await supabaseAdmin.from('webnixo_profiles_affilate').update(updateData).eq('email', email);
+  if (error) { console.error(error.message); return res.status(500).json({ error: "Internal server error" }); }
   res.json({ success: true });
 });
 
@@ -556,7 +622,7 @@ app.post("/api/admin/profiles/update", requireAdmin, async (req, res) => {
 
 async function init() {
   // Robust check to force development/Vite mode when running server.ts directly
-  const isDev = process.env.NODE_ENV !== "production" || (typeof import.meta.url === "string" && import.meta.url.endsWith(".ts"));
+  const isDev = process.env.NODE_ENV !== "production" || (false /* import.meta.url not available in cjs */);
 
   if (isDev) {
     console.log("Starting development mode with Vite middleware...");

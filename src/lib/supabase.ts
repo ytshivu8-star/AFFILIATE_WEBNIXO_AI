@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to payments" ON public.payments;
-CREATE POLICY "Public full access to payments" ON public.payments FOR ALL USING (true) WITH CHECK (true);
+-- No public access to payments
 
 
 -- 3. Create Core User Subscriptions Table
@@ -267,7 +267,7 @@ CREATE TABLE IF NOT EXISTS public.coupons (
 
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to coupons" ON public.coupons;
-CREATE POLICY "Public full access to coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
+-- No public access to coupons
 
 CREATE TABLE IF NOT EXISTS public.coupon_usages (
     id TEXT PRIMARY KEY,
@@ -281,7 +281,7 @@ CREATE TABLE IF NOT EXISTS public.coupon_usages (
 
 ALTER TABLE public.coupon_usages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to coupon_usages" ON public.coupon_usages;
-CREATE POLICY "Public full access to coupon_usages" ON public.coupon_usages FOR ALL USING (true) WITH CHECK (true);
+-- No public access to coupon_usages
 
 
 -- ==========================================
