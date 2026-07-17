@@ -131,7 +131,7 @@ async function checkRateLimit(action, identifier, maxRequests, windowMs) {
       return { allowed: false };
     }
 
-    await supabase.from('webnixo_settings_affilate').upsert({
+    await supabaseAdmin.from('webnixo_settings_affilate').upsert({
       key,
       value: JSON.stringify({ count: count + 1, expireAt }),
       updated_at: new Date().toISOString()
@@ -148,7 +148,7 @@ async function clearRateLimit(action, identifier) {
   if (!supabase) return;
   const key = `rl_${action}_${identifier}`;
   try {
-    await supabase.from('webnixo_settings_affilate').delete().eq('key', key);
+    await supabaseAdmin.from('webnixo_settings_affilate').delete().eq('key', key);
   } catch (err) {}
 }
 
@@ -312,7 +312,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
   if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
   
   if (supabase && email && password) {
-    await supabase.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
+    await supabaseAdmin.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
   }
   return res.json({ success: true });
 });
@@ -387,9 +387,9 @@ app.post("/api/send-otp", async (req, res) => {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
 
     if (supabase) {
-      await supabase.from('webnixo_otps_affilate').delete().eq('email', email).eq('purpose', purpose);
+      await supabaseAdmin.from('webnixo_otps_affilate').delete().eq('email', email).eq('purpose', purpose);
       
-      const { error } = await supabase.from('webnixo_otps_affilate').insert({
+      const { error } = await supabaseAdmin.from('webnixo_otps_affilate').insert({
         id: Math.random().toString(36).substring(2, 15),
         email,
         otp_code: otpHash,
@@ -456,6 +456,104 @@ app.post("/api/send-otp", async (req, res) => {
 });
 
 // Setup Vite or Static File serving depending on environment
+
+
+// --- ADMIN ENDPOINTS ---
+
+const requireAdmin = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "Missing authorization header" });
+  if (!supabaseAdmin) return res.status(500).json({ error: "Supabase Admin not configured" });
+
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: "Invalid token" });
+
+  const { data: profile } = await supabaseAdmin.from('webnixo_profiles_affilate').select('is_admin').eq('email', user.email).maybeSingle();
+  if (!profile || !profile.is_admin) {
+    return res.status(403).json({ error: "Forbidden: Admins only" });
+  }
+  
+  req.adminEmail = user.email;
+  next();
+};
+
+
+app.post("/api/user/profile", async (req, res) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: "Missing authorization header" });
+  if (!supabaseAdmin) return res.status(500).json({ error: "Supabase Admin not configured" });
+
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) return res.status(401).json({ error: "Invalid token" });
+
+  const { profile, payoutDetails } = req.body;
+  if (profile.email !== user.email) {
+    return res.status(403).json({ error: "Cannot modify another user's profile" });
+  }
+
+  // Sanitize updates to prevent tampering with sensitive fields like stats or is_admin
+  const updateData = {
+    full_name: profile.fullName,
+    phone: profile.phone,
+    company_name: profile.companyName,
+    website: profile.website,
+    promo_strategy: profile.promoStrategy,
+    country: profile.country,
+    custom_coupon_code: profile.customCouponCode,
+    payout_details: payoutDetails,
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await supabaseAdmin.from('webnixo_profiles_affilate').update(updateData).eq('email', user.email);
+  if (error) return res.status(500).json({ error: error.message });
+  
+  res.json({ success: true });
+});
+
+
+app.post("/api/admin/settings/sync", requireAdmin, async (req, res) => {
+  const { upserts } = req.body;
+  const { error } = await supabaseAdmin.from('webnixo_settings_affilate').upsert(upserts);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.get("/api/admin/profiles", requireAdmin, async (req, res) => {
+  const { data, error } = await supabaseAdmin.from('webnixo_profiles_affilate').select('*').order('joined_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ profiles: data });
+});
+
+
+app.post("/api/admin/payouts/sync", requireAdmin, async (req, res) => {
+  const { email, payouts } = req.body;
+  const { error } = await supabaseAdmin.from('webnixo_payout_history_affilate').upsert(payouts);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.get("/api/admin/payouts", requireAdmin, async (req, res) => {
+  const { data, error } = await supabaseAdmin.from('webnixo_payout_history_affilate').select('*').order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ payouts: data });
+});
+
+app.post("/api/admin/subscription-plans", requireAdmin, async (req, res) => {
+  const plan = req.body;
+  const { error } = await supabaseAdmin.from('subscription_plans').upsert(plan);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+app.post("/api/admin/profiles/update", requireAdmin, async (req, res) => {
+  const { email, data } = req.body;
+  const { error } = await supabaseAdmin.from('webnixo_profiles_affilate').update(data).eq('email', email);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// --- END ADMIN ENDPOINTS ---
+
 async function init() {
   // Robust check to force development/Vite mode when running server.ts directly
   const isDev = process.env.NODE_ENV !== "production" || (typeof import.meta.url === "string" && import.meta.url.endsWith(".ts"));

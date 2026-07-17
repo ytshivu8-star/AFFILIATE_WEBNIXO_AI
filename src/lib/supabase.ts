@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_events_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_events_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to events" ON public.webnixo_events_affilate;
-CREATE POLICY "Public full access to events" ON public.webnixo_events_affilate FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for events" ON public.webnixo_events_affilate FOR ALL TO authenticated USING (user_email = (auth.jwt() ->> 'email')) WITH CHECK (user_email = (auth.jwt() ->> 'email'));
 
 
 -- 3. Create Payout History Affiliate Table (webnixo_payout_history_affilate)
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_payout_history_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_payout_history_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to payout history" ON public.webnixo_payout_history_affilate;
-CREATE POLICY "Public full access to payout history" ON public.webnixo_payout_history_affilate FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for payouts" ON public.webnixo_payout_history_affilate FOR ALL TO authenticated USING (user_email = (auth.jwt() ->> 'email')) WITH CHECK (user_email = (auth.jwt() ->> 'email'));
 
 
 -- 4. Create Settings Affiliate Table (webnixo_settings_affilate)
@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS public.webnixo_settings_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_settings_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to settings" ON public.webnixo_settings_affilate;
-CREATE POLICY "Public full access to settings" ON public.webnixo_settings_affilate FOR ALL USING (true) WITH CHECK (true);
+-- Settings can be read by authenticated users but only modified by service role
+CREATE POLICY "Settings are readable by authenticated users" ON public.webnixo_settings_affilate FOR SELECT TO authenticated USING (true);
 
 
 -- 5. Create OTP Affiliate Table (webnixo_otps_affilate)
@@ -193,7 +194,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_otps_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_otps_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to otps" ON public.webnixo_otps_affilate;
-CREATE POLICY "Public full access to otps" ON public.webnixo_otps_affilate FOR ALL USING (true) WITH CHECK (true);
+-- No access to OTPs for anyone except the service role backend
 
 
 -- ==========================================
@@ -328,17 +329,7 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
 };
 
 // 1. Settings Synchronization Helpers
-export const syncSettingsToSupabase = async (settings: {
-  commission_rate: string;
-  min_payout: string;
-  comm_199: string;
-  comm_499: string;
-  comm_999: string;
-  admin_password?: string;
-  marketing_logoUrl?: string;
-  marketing_videoCode?: string;
-  marketing_banners?: string;
-}) => {
+export const syncSettingsToSupabase = async (settings: Record<string, any>) => {
   if (!supabase) return;
   try {
     const upserts = Object.entries(settings).map(([key, val]) => {
@@ -347,13 +338,24 @@ export const syncSettingsToSupabase = async (settings: {
     }).filter(Boolean);
 
     if (upserts.length > 0) {
-      await supabase.from('webnixo_settings_affilate').upsert(upserts);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      
+      const res = await fetch("/api/admin/settings/sync", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ upserts })
+      });
+      const data = await res.json();
+      if (!data.success) console.warn("Supabase settings sync error:", data.error);
     }
   } catch (err: any) {
-    console.warn("Supabase settings sync error:", err.message);
+    console.warn("Supabase settings sync exception:", err.message);
   }
 };
-
 export const loadSettingsFromSupabase = async (): Promise<Record<string, string> | null> => {
   if (!supabase) return null;
   try {
@@ -393,22 +395,32 @@ export const syncProfileToSupabase = async (
       referral_code: profile.referralCode,
       custom_coupon_code: profile.customCouponCode || '',
       joined_at: profile.joinedAt,
-      is_admin: profile.email === 'shiva@webnixo.in',
       stats: stats,
       payout_details: payoutDetails,
       updated_at: new Date().toISOString()
     };
 
-    const { error } = await supabase.from('webnixo_profiles_affilate').upsert(upsertData, { onConflict: 'email' });
-    if (error) {
-      supabaseErrorState.hasSchemaError = true;
-      supabaseErrorState.errorMessage = error.message;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    // Use admin endpoint for syncing
+    const res = await fetch("/api/admin/profiles/update", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ email: profile.email, data: upsertData })
+    });
+    
+    const data = await res.json();
+    if (!data.success) {
+      console.warn("Error updating profile via admin endpoint:", data.error);
     }
   } catch (err: any) {
-    console.warn("Supabase profile sync error:", err.message);
+    console.warn("syncProfileToSupabase exception:", err.message);
   }
 };
-
 export const loadProfileFromSupabase = async (email: string): Promise<{
   profile: UserProfile;
   stats: AffiliateStats;
@@ -526,12 +538,26 @@ export const syncPayoutsToSupabase = async (email: string, payouts: PayoutHistor
       transaction_id: item.transactionId || null
     }));
 
-    await supabase.from('webnixo_payout_history_affilate').upsert(upserts);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const res = await fetch("/api/admin/payouts/sync", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ email, payouts: upserts })
+    });
+    
+    const data = await res.json();
+    if (!data.success) {
+      console.warn("Supabase payouts sync error:", data.error);
+    }
   } catch (err: any) {
-    console.warn("Supabase payouts sync error:", err.message);
+    console.warn("Supabase payouts sync exception:", err.message);
   }
 };
-
 export const loadPayoutsFromSupabase = async (email: string): Promise<PayoutHistoryItem[] | null> => {
   if (!supabase) return null;
   try {
@@ -562,21 +588,24 @@ export const loadPayoutsFromSupabase = async (email: string): Promise<PayoutHist
 export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('webnixo_profiles_affilate')
-      .select('*')
-      .order('joined_at', { ascending: false });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+
+    const res = await fetch("/api/admin/profiles", {
+      headers: { "Authorization": `Bearer ${session.access_token}` }
+    });
+    const { profiles: data, error } = await res.json();
 
     if (error || !data) return null;
 
-    return data.map(u => {
+    return data.map((u: any) => {
       const stats = u.stats || { clicks: 0, signups: 0, sales: 0, commissionEarned: 0, unpaidCommission: 0 };
       const payoutDetailsObj = u.payout_details || {};
       const payoutMethod = payoutDetailsObj.payoutMethod || 'upi';
       const payoutDetails = payoutMethod === 'upi' 
-        ? payoutDetailsObj.upiId || '' 
-        : `${payoutDetailsObj.bankName || ''} (A/C: ${payoutDetailsObj.accountNumber || ''})`;
-
+         ? payoutDetailsObj.upiId || '' 
+         : `${payoutDetailsObj.bankName || ''} (A/C: ${payoutDetailsObj.accountNumber || ''})`;
+         
       return {
         id: u.id,
         email: u.email,
@@ -595,7 +624,8 @@ export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
         payoutDetails: payoutDetails,
         status: u.is_admin ? 'Active' : 'Active', // Defaults to active
         joinedAt: u.joined_at,
-        isRegisteredAffiliate: u.is_registered
+        isRegisteredAffiliate: u.is_registered,
+        isAdmin: u.is_admin
       };
     });
   } catch (err) {
@@ -603,18 +633,20 @@ export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
     return null;
   }
 };
-
 export const loadAllPayoutsFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('webnixo_payout_history_affilate')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return null;
+
+    const res = await fetch("/api/admin/payouts", {
+      headers: { "Authorization": `Bearer ${session.access_token}` }
+    });
+    const { payouts: data, error } = await res.json();
 
     if (error || !data) return null;
 
-    return data.map(item => ({
+    return data.map((item: any) => ({
       id: item.id,
       userEmail: item.user_email,
       amount: Number(item.amount),
@@ -629,7 +661,6 @@ export const loadAllPayoutsFromSupabase = async (): Promise<any[] | null> => {
     return null;
   }
 };
-
 export const storeOTPInSupabase = async (
   email: string,
   otpCode: string,
@@ -696,8 +727,20 @@ export const loadSubscriptionPlansFromSupabase = async (): Promise<any[] | null>
 export const saveSubscriptionPlanToSupabase = async (plan: any): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
-    const { error } = await supabase.from('subscription_plans').upsert(plan);
-    if (error) return { success: false, error: error.message };
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { success: false, error: "No session" };
+
+    const res = await fetch("/api/admin/subscription-plans", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(plan)
+    });
+    
+    const data = await res.json();
+    if (data.error) return { success: false, error: data.error };
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
