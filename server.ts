@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import express from "express";
 import crypto from "crypto";
 import path from "path";
@@ -181,10 +182,20 @@ app.post("/api/auth/login", async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const { data, error } = await supabaseAdmin.from('webnixo_profiles_affilate').select('*').eq('email', cleanEmail).maybeSingle();
-  
-  if (error || !data || data.password !== password) {
+  if (error || !data) {
     logSecurityEvent(req, '/api/auth/login', cleanEmail, 'Blocked', 'Invalid credentials');
     return res.status(401).json({ error: "Invalid credentials." });
+  }
+  
+  const isMatch = data.password === password || (data.password && data.password.startsWith('$2') && await bcrypt.compare(password, data.password));
+  if (!isMatch) {
+    logSecurityEvent(req, '/api/auth/login', cleanEmail, 'Blocked', 'Invalid credentials');
+    return res.status(401).json({ error: "Invalid credentials." });
+  }
+  
+  if (data.password === password) {
+    const hashed = await bcrypt.hash(password, 10);
+    await supabaseAdmin.from('webnixo_profiles_affilate').update({ password: hashed }).eq('email', cleanEmail);
   }
 
   // Ensure user is migrated to auth.users
@@ -335,7 +346,9 @@ app.post("/api/auth/reset-password", async (req, res) => {
     if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
 
     if (supabaseAdmin) {
-      await supabaseAdmin.from('webnixo_profiles_affilate').update({ password }).eq('email', email);
+      
+      const hashed = await bcrypt.hash(password, 10);
+      await supabaseAdmin.from('webnixo_profiles_affilate').update({ password: hashed }).eq('email', email);
     }
     return res.json({ success: true });
   } catch (err: any) {
@@ -619,6 +632,23 @@ app.post("/api/admin/profiles/update", requireAdmin, async (req, res) => {
 });
 
 // --- END ADMIN ENDPOINTS ---
+
+
+// Automatic OTP Cleanup Routine
+setInterval(async () => {
+  if (supabaseAdmin) {
+    try {
+      const { error } = await supabaseAdmin.from('webnixo_otps_affilate').delete().lt('expires_at', new Date().toISOString());
+      if (error) console.error("OTP Cleanup Error:", error.message);
+    } catch (e) {}
+  }
+  
+  // Cleanup in-memory store
+  const now = Date.now();
+  for (const [key, value] of otpStore.entries()) {
+    if (now > value.expiresAt) otpStore.delete(key);
+  }
+}, 10 * 60 * 1000); // Run every 10 minutes
 
 async function init() {
   // Robust check to force development/Vite mode when running server.ts directly

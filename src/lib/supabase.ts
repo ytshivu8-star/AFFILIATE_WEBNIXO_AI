@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to profiles" ON public.profiles;
-CREATE POLICY "Public full access to profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for profiles" ON public.profiles FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
 
 
 -- 2. Create Core Payments Table
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to user_subscriptions" ON public.user_subscriptions;
-CREATE POLICY "Public full access to user_subscriptions" ON public.user_subscriptions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for user_subscriptions" ON public.user_subscriptions FOR SELECT TO authenticated USING (email = (auth.jwt() ->> 'email'));
 
 
 -- 4. Create Core Conversions Table
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.conversions (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.conversions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to conversions" ON public.conversions;
-CREATE POLICY "Public full access to conversions" ON public.conversions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "User isolation for conversions" ON public.conversions FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
 
 
 -- ==========================================
@@ -250,7 +250,7 @@ DROP POLICY IF EXISTS "Allow public read access to subscription plans" ON public
 DROP POLICY IF EXISTS "Public full access to subscription plans" ON public.subscription_plans;
 
 -- Allow anonymous read and write access for admin purposes
-CREATE POLICY "Public full access to subscription plans" ON public.subscription_plans FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public read access to subscription plans" ON public.subscription_plans FOR SELECT TO authenticated USING (true);
 
 
 -- ==========================================
@@ -305,7 +305,42 @@ ON CONFLICT (id) DO NOTHING;
 
 ALTER TABLE public.model_prices ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to model_prices" ON public.model_prices;
-CREATE POLICY "Public full access to model_prices" ON public.model_prices FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public read access to model_prices" ON public.model_prices FOR SELECT TO authenticated USING (true);
+
+
+DO $ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='webnixo_profiles_affilate' AND column_name='deleted_at') THEN
+        ALTER TABLE public.webnixo_profiles_affilate ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='webnixo_events_affilate' AND column_name='deleted_at') THEN
+        ALTER TABLE public.webnixo_events_affilate ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $;
+
+-- Add Foreign Key Constraints
+DO $ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payments_plan') THEN
+        ALTER TABLE public.payments ADD CONSTRAINT fk_payments_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_subscriptions_plan') THEN
+        ALTER TABLE public.user_subscriptions ADD CONSTRAINT fk_subscriptions_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_events_user') THEN
+        ALTER TABLE public.webnixo_events_affilate ADD CONSTRAINT fk_events_user FOREIGN KEY (user_email) REFERENCES public.webnixo_profiles_affilate(email) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payouts_user') THEN
+        ALTER TABLE public.webnixo_payout_history_affilate ADD CONSTRAINT fk_payouts_user FOREIGN KEY (user_email) REFERENCES public.webnixo_profiles_affilate(email) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_coupon_usages_coupon') THEN
+        ALTER TABLE public.coupon_usages ADD CONSTRAINT fk_coupon_usages_coupon FOREIGN KEY (code) REFERENCES public.coupons(code) ON DELETE CASCADE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_coupon_usages_plan') THEN
+        ALTER TABLE public.coupon_usages ADD CONSTRAINT fk_coupon_usages_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
+    END IF;
+END $;
+
 `;
 };
 
