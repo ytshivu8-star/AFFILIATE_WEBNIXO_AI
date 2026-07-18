@@ -30,6 +30,7 @@ export default function App() {
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [verificationMode, setVerificationMode] = useState<'none' | 'signup_otp' | 'forgot_email' | 'forgot_otp' | 'reset_password'>('none');
+  const [resetToken, setResetToken] = useState("");
     const [otpInput, setOtpInput] = useState('');
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
@@ -284,7 +285,7 @@ export default function App() {
         const resetRes = await fetch('/api/auth/reset-password', { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ email: emailToReset, password: newPasswordInput, turnstileToken }) 
+          body: JSON.stringify({ email: emailToReset, password: newPasswordInput, turnstileToken, resetToken }) 
         });
         if (!resetRes.ok) {
           const errData = await resetRes.json();
@@ -336,13 +337,14 @@ export default function App() {
     const purposeStr = verificationMode === 'signup_otp' ? 'register' : 'forgot_password';
     
     // We bypassed turnstile on server, so we just call the api directly
+    let data: any = {};
     try {
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: emailToVerify, otpCode: otpInput.trim(), purpose: purposeStr, password: passwordInput })
       });
-      const data = await res.json();
+      data = await res.json();
       if (!res.ok) {
         setOtpError(data.error || "Verification failed");
         return;
@@ -355,10 +357,20 @@ export default function App() {
     }
     
     if (verificationMode === 'signup_otp') {
+      if (!isSupabaseConfigured()) {
+         const globalUsersStr = localStorage.getItem('webnixo_global_users') || "[]";
+         const globalUsers = JSON.parse(globalUsersStr);
+         if (!globalUsers.find((u: any) => u.email === emailInput)) {
+            globalUsers.push({ email: emailInput, password: passwordInput });
+            localStorage.setItem('webnixo_global_users', JSON.stringify(globalUsers));
+         }
+      }
       setIsLoggedIn(true);
       setUser({ ...user, email: emailInput });
       setVerificationMode('none');
+      localStorage.setItem('wwebnixo_isLoggedIn', 'true');
     } else {
+      if (data.resetToken) setResetToken(data.resetToken);
       setVerificationMode('reset_password');
     }
   };
@@ -429,6 +441,15 @@ export default function App() {
                       <span className="text-sm font-medium text-slate-600">Remember me</span>
                     </label>
                     <button type="button" onClick={() => setVerificationMode('forgot_email')} className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">Forgot password?</button>
+                  </div>
+                )}
+                
+                {authMode === 'signup' && (
+                  <div className="pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" required className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                      <span className="text-sm font-medium text-slate-600">I agree to the <a href="#" className="text-indigo-600 hover:underline">Terms and Conditions</a></span>
+                    </label>
                   </div>
                 )}
                 

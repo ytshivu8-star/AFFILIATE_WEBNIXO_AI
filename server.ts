@@ -19,10 +19,10 @@ app.use(express.json());
 
 // API: Check Resend connection and configuration status
 app.get("/api/resend-status", (req, res) => {
-  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
+  let rawApiKey = (process.env.RESEND_API_KEY || "").trim();
   rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
-  let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
+  let rawFromEmail = (process.env.RESEND_FROM_EMAIL || "").trim();
   rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
   const isCustomKey = rawApiKey !== "" && rawApiKey.length > 10;
@@ -34,21 +34,10 @@ app.get("/api/resend-status", (req, res) => {
     fromEmail = "WEBNIXO AI <no-reply@auth.webnixo.in>";
   }
 
-  // Mask the API Key for security: re_abcd...wxyz
-  let maskedKey = "None";
-  if (isCustomKey) {
-    if (rawApiKey.length > 8) {
-      maskedKey = `${rawApiKey.substring(0, 5)}...${rawApiKey.substring(rawApiKey.length - 4)}`;
-    } else {
-      maskedKey = "Custom key (too short)";
-    }
-  } else {
-    maskedKey = "Default demo key";
-  }
 
   res.json({
     isCustomKey,
-    maskedKey,
+
     fromEmail,
   });
 });
@@ -314,6 +303,7 @@ app.post("/api/auth/verify-otp", async (req, res) => {
   logSecurityEvent(req, '/api/auth/verify-otp', cleanEmail, 'Allowed', 'Success');
 
   let session = null;
+  let resetToken = null;
   if (purpose === 'register' && password && supabaseAdmin) {
     let authUser = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
     if (authUser.error) {
@@ -323,9 +313,13 @@ app.post("/api/auth/verify-otp", async (req, res) => {
     if (!authUser.error) {
       session = authUser.data.session;
     }
+  } else if (purpose === 'forgot_password') {
+    resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    otpStore.set("reset_token_" + cleanEmail, { token: resetToken, expiresAt });
   }
 
-  return res.json({ success: true, session });
+  return res.json({ success: true, session, resetToken });
 });
 app.post("/api/auth/reset-password", async (req, res) => {
   try {
@@ -337,10 +331,18 @@ app.post("/api/auth/reset-password", async (req, res) => {
     }
     logTurnstileEvent(req, '/api/auth/reset-password', true);
 
-    const { email, password } = req.body;
-    if (!isValidEmail(email) || !isValidPassword(password)) {
-      return res.status(400).json({ error: "Invalid email or password format" });
+    const { email, password, resetToken } = req.body;
+    if (!isValidEmail(email) || !isValidPassword(password) || !resetToken) {
+      return res.status(400).json({ error: "Invalid payload format" });
     }
+    const cleanEmail = email.toLowerCase().trim();
+    const storedReset = otpStore.get("reset_token_" + cleanEmail);
+    if (!storedReset || storedReset.token !== resetToken || Date.now() > storedReset.expiresAt) {
+      otpStore.delete("reset_token_" + cleanEmail);
+      logSecurityEvent(req, '/api/auth/reset-password', cleanEmail, 'Blocked', 'Invalid or expired reset token');
+      return res.status(400).json({ error: "Invalid or expired reset session. Please request a new code." });
+    }
+    otpStore.delete("reset_token_" + cleanEmail); // Single use
 
     const rl = await checkRateLimit("reset_pwd", ip, 3, 60 * 60 * 1000);
     if (!rl.allowed) return res.status(429).json({ error: "Too many password reset attempts. Please try again later." });
@@ -348,7 +350,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
     if (supabaseAdmin) {
       
       const hashed = await bcrypt.hash(password, 10);
-      await supabaseAdmin.from('webnixo_profiles_affilate').update({ password: hashed }).eq('email', email);
+      await supabaseAdmin.from('webnixo_profiles_affilate').update({ password: hashed }).eq('email', cleanEmail);
     }
     return res.json({ success: true });
   } catch (err: any) {
@@ -397,9 +399,20 @@ app.post("/api/auth/forgot-password", async (req, res) => {
 
 
 // API: Send OTP email proxy route (Server-side bypasses browser CORS and secures the API Key)
+const pendingOtpRequests = new Set();
 app.post("/api/send-otp", async (req, res) => {
   try {
     const ip = getIP(req);
+    const { toEmail } = req.body;
+    if (toEmail) {
+       const emailLock = toEmail.toLowerCase().trim();
+       if (pendingOtpRequests.has(emailLock)) {
+          return res.status(429).json({ success: false, error: "Request already in progress" });
+       }
+       pendingOtpRequests.add(emailLock);
+       res.on('finish', () => pendingOtpRequests.delete(emailLock));
+       res.on('close', () => pendingOtpRequests.delete(emailLock));
+    }
     const turnstileData = await verifyTurnstile(req.body.turnstileToken, ip);
     if (!turnstileData.success) {
       logTurnstileEvent(req, '/api/send-otp', false, turnstileData['error-codes']?.join(', '));
@@ -407,9 +420,9 @@ app.post("/api/send-otp", async (req, res) => {
     }
     logTurnstileEvent(req, '/api/send-otp', true);
     
-    const { toEmail, purpose } = req.body;
-    if (!toEmail || !purpose) {
-      return res.status(400).json({ success: false, error: "Missing required fields (toEmail, purpose)" });
+    const { purpose } = req.body;
+    if (!isValidEmail(toEmail) || typeof purpose !== 'string' || purpose.length > 50) {
+      return res.status(400).json({ success: false, error: "Invalid request payload" });
     }
 
     const email = toEmail.toLowerCase().trim();
@@ -418,13 +431,25 @@ app.post("/api/send-otp", async (req, res) => {
       const rlForgot = await checkRateLimit(`forgot_email`, email, 3, 10 * 60 * 1000);
       if (!rlForgot.allowed) {
         logSecurityEvent(req, '/api/send-otp (forgot)', email, 'Blocked', 'Rate limit exceeded (3/10m)');
-        return res.json({ success: true, messageId: "simulated" }); // "Always return the same response"
+        return res.json({ success: true, messageId: "simulated" }); 
+      }
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('webnixo_profiles_affilate').select('id').eq('email', email).maybeSingle();
+        if (!data) {
+           return res.json({ success: true, messageId: "simulated" });
+        }
       }
     } else if (purpose === 'register') {
       const rlResend = await checkRateLimit(`resend_email`, email, 3, 10 * 60 * 1000);
       if (!rlResend.allowed) {
          logSecurityEvent(req, '/api/send-otp (resend)', email, 'Blocked', 'Rate limit exceeded (3/10m)');
          return res.json({ success: true, messageId: "simulated" });
+      }
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('webnixo_profiles_affilate').select('id').eq('email', email).maybeSingle();
+        if (data) {
+           return res.json({ success: true, messageId: "simulated" });
+        }
       }
     }
 
@@ -453,10 +478,10 @@ app.post("/api/send-otp", async (req, res) => {
       });
     }
 
-    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
+    let rawApiKey = (process.env.RESEND_API_KEY || "").trim();
     rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
-    let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
+    let rawFromEmail = (process.env.RESEND_FROM_EMAIL || "").trim();
     rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
     let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
