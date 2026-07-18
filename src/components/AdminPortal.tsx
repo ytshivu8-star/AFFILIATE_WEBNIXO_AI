@@ -91,7 +91,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [marketingBannerSquareDesc, setMarketingBannerSquareDesc] = useState('');
   const [marketingBannerSocialTitle, setMarketingBannerSocialTitle] = useState('');
   const [marketingBannerSocialDesc, setMarketingBannerSocialDesc] = useState('');
-  const [adminPassword, setAdminPassword] = useState((import.meta as any).env.VITE_DEFAULT_ADMIN_PASSWORD || '');
+  const [adminPassword, setAdminPassword] = useState('123456');
 
   // Plan Specific Commission Payout rates editable by admin
   const [plan199Comm, setPlan199Comm] = useState<number>(39.80);
@@ -152,7 +152,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         const activeAffiliate: GlobalAffiliate = {
           id: activeId,
           email: parsedUser.email,
-          password: parsedUser.password || '',
+          password: parsedUser.password || 'password123',
           fullName: parsedUser.fullName || 'Active Affiliate',
           companyName: parsedUser.companyName || 'N/A',
           website: parsedUser.website || 'N/A',
@@ -175,7 +175,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
           if (u.email === parsedUser.email) {
             return {
               ...u,
-              password: parsedUser.password || u.password || '',
+              password: parsedUser.password || u.password || 'password123',
               sales: parsedStats.sales || 0,
               commissionEarned: parsedStats.commissionEarned || 0,
               unpaidCommission: parsedStats.unpaidCommission || 0,
@@ -291,7 +291,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setPlan999Comm(Number(stored999));
 
     // 4. Load admin password and marketing resources
-    const storedAdminPass = localStorage.getItem('webnixo_admin_password') || (import.meta as any).env.VITE_DEFAULT_ADMIN_PASSWORD;
+    const storedAdminPass = localStorage.getItem('webnixo_admin_password') || '123456';
     setAdminPassword(storedAdminPass);
 
     const storedLogo = localStorage.getItem('webnixo_marketing_logoUrl') || 'https://lh3.googleusercontent.com/d/11yuTE40NZx1imt0DARVHUfIPTrgtrJA6=s512';
@@ -358,7 +358,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               const mappedAffiliate: GlobalAffiliate = {
                 id: remote.id,
                 email: remote.email,
-                password: remote.password || '',
+                password: remote.password || 'password123',
                 fullName: remote.fullName,
                 companyName: remote.companyName,
                 website: remote.website,
@@ -1273,7 +1273,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           <td className="p-4 font-mono text-slate-300">{partner.email}</td>
                           <td className="p-4">
                             <span className="font-mono text-amber-400 bg-amber-950/20 border border-amber-900/10 px-2 py-0.5 rounded select-all font-semibold">
-                              {partner.password || ''}
+                              {partner.password || 'password123'}
                             </span>
                           </td>
                           <td className="p-4">

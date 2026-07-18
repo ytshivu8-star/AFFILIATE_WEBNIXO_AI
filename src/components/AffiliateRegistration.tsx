@@ -4,7 +4,6 @@ import {
   HelpCircle, ArrowUpRight, DollarSign, FileText, Sparkles 
 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
 
 interface AffiliateRegistrationProps {
   onRegister: (data: Partial<UserProfile>) => void;

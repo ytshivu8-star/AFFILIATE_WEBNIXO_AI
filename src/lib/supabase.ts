@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to profiles" ON public.profiles;
-CREATE POLICY "User isolation for profiles" ON public.profiles FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 2. Create Core Payments Table
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to payments" ON public.payments;
--- No public access to payments
+CREATE POLICY "Public full access to payments" ON public.payments FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 3. Create Core User Subscriptions Table
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.user_subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to user_subscriptions" ON public.user_subscriptions;
-CREATE POLICY "User isolation for user_subscriptions" ON public.user_subscriptions FOR SELECT TO authenticated USING (email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to user_subscriptions" ON public.user_subscriptions FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 4. Create Core Conversions Table
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.conversions (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.conversions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to conversions" ON public.conversions;
-CREATE POLICY "User isolation for conversions" ON public.conversions FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to conversions" ON public.conversions FOR ALL USING (true) WITH CHECK (true);
 
 
 -- ==========================================
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_profiles_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_profiles_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to profiles" ON public.webnixo_profiles_affilate;
-CREATE POLICY "User isolation for profiles" ON public.webnixo_profiles_affilate FOR ALL TO authenticated USING (email = (auth.jwt() ->> 'email')) WITH CHECK (email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to profiles" ON public.webnixo_profiles_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 2. Create Events Affiliate Table (webnixo_events_affilate)
@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_events_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_events_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to events" ON public.webnixo_events_affilate;
-CREATE POLICY "User isolation for events" ON public.webnixo_events_affilate FOR ALL TO authenticated USING (user_email = (auth.jwt() ->> 'email')) WITH CHECK (user_email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to events" ON public.webnixo_events_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 3. Create Payout History Affiliate Table (webnixo_payout_history_affilate)
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_payout_history_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_payout_history_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to payout history" ON public.webnixo_payout_history_affilate;
-CREATE POLICY "User isolation for payouts" ON public.webnixo_payout_history_affilate FOR ALL TO authenticated USING (user_email = (auth.jwt() ->> 'email')) WITH CHECK (user_email = (auth.jwt() ->> 'email'));
+CREATE POLICY "Public full access to payout history" ON public.webnixo_payout_history_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 4. Create Settings Affiliate Table (webnixo_settings_affilate)
@@ -176,8 +176,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_settings_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_settings_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to settings" ON public.webnixo_settings_affilate;
--- Settings can be read by authenticated users but only modified by service role
-CREATE POLICY "Settings are readable by authenticated users" ON public.webnixo_settings_affilate FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Public full access to settings" ON public.webnixo_settings_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
 -- 5. Create OTP Affiliate Table (webnixo_otps_affilate)
@@ -194,7 +193,7 @@ CREATE TABLE IF NOT EXISTS public.webnixo_otps_affilate (
 -- Enable RLS and setup policies safely
 ALTER TABLE public.webnixo_otps_affilate ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to otps" ON public.webnixo_otps_affilate;
--- No access to OTPs for anyone except the service role backend
+CREATE POLICY "Public full access to otps" ON public.webnixo_otps_affilate FOR ALL USING (true) WITH CHECK (true);
 
 
 -- ==========================================
@@ -208,7 +207,7 @@ INSERT INTO public.webnixo_settings_affilate (key, value) VALUES
 ('comm_199', '39.80'),
 ('comm_499', '99.80'),
 ('comm_999', '199.80'),
-('admin_password', 'CHANGE_ME_IMMEDIATELY')
+('admin_password', '123456')
 ON CONFLICT (key) DO NOTHING;
 
 
@@ -250,7 +249,7 @@ DROP POLICY IF EXISTS "Allow public read access to subscription plans" ON public
 DROP POLICY IF EXISTS "Public full access to subscription plans" ON public.subscription_plans;
 
 -- Allow anonymous read and write access for admin purposes
-CREATE POLICY "Public read access to subscription plans" ON public.subscription_plans FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Public full access to subscription plans" ON public.subscription_plans FOR ALL USING (true) WITH CHECK (true);
 
 
 -- ==========================================
@@ -267,7 +266,7 @@ CREATE TABLE IF NOT EXISTS public.coupons (
 
 ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to coupons" ON public.coupons;
--- No public access to coupons
+CREATE POLICY "Public full access to coupons" ON public.coupons FOR ALL USING (true) WITH CHECK (true);
 
 CREATE TABLE IF NOT EXISTS public.coupon_usages (
     id TEXT PRIMARY KEY,
@@ -281,7 +280,7 @@ CREATE TABLE IF NOT EXISTS public.coupon_usages (
 
 ALTER TABLE public.coupon_usages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to coupon_usages" ON public.coupon_usages;
--- No public access to coupon_usages
+CREATE POLICY "Public full access to coupon_usages" ON public.coupon_usages FOR ALL USING (true) WITH CHECK (true);
 
 
 -- ==========================================
@@ -305,42 +304,7 @@ ON CONFLICT (id) DO NOTHING;
 
 ALTER TABLE public.model_prices ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public full access to model_prices" ON public.model_prices;
-CREATE POLICY "Public read access to model_prices" ON public.model_prices FOR SELECT TO authenticated USING (true);
-
-
-DO $ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='webnixo_profiles_affilate' AND column_name='deleted_at') THEN
-        ALTER TABLE public.webnixo_profiles_affilate ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='webnixo_events_affilate' AND column_name='deleted_at') THEN
-        ALTER TABLE public.webnixo_events_affilate ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
-    END IF;
-END $;
-
--- Add Foreign Key Constraints
-DO $ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payments_plan') THEN
-        ALTER TABLE public.payments ADD CONSTRAINT fk_payments_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_subscriptions_plan') THEN
-        ALTER TABLE public.user_subscriptions ADD CONSTRAINT fk_subscriptions_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_events_user') THEN
-        ALTER TABLE public.webnixo_events_affilate ADD CONSTRAINT fk_events_user FOREIGN KEY (user_email) REFERENCES public.webnixo_profiles_affilate(email) ON DELETE CASCADE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_payouts_user') THEN
-        ALTER TABLE public.webnixo_payout_history_affilate ADD CONSTRAINT fk_payouts_user FOREIGN KEY (user_email) REFERENCES public.webnixo_profiles_affilate(email) ON DELETE CASCADE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_coupon_usages_coupon') THEN
-        ALTER TABLE public.coupon_usages ADD CONSTRAINT fk_coupon_usages_coupon FOREIGN KEY (code) REFERENCES public.coupons(code) ON DELETE CASCADE;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_coupon_usages_plan') THEN
-        ALTER TABLE public.coupon_usages ADD CONSTRAINT fk_coupon_usages_plan FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id) ON DELETE CASCADE;
-    END IF;
-END $;
-
+CREATE POLICY "Public full access to model_prices" ON public.model_prices FOR ALL USING (true) WITH CHECK (true);
 `;
 };
 
@@ -364,7 +328,17 @@ export const checkSupabaseConnection = async (): Promise<boolean> => {
 };
 
 // 1. Settings Synchronization Helpers
-export const syncSettingsToSupabase = async (settings: Record<string, any>) => {
+export const syncSettingsToSupabase = async (settings: {
+  commission_rate: string;
+  min_payout: string;
+  comm_199: string;
+  comm_499: string;
+  comm_999: string;
+  admin_password?: string;
+  marketing_logoUrl?: string;
+  marketing_videoCode?: string;
+  marketing_banners?: string;
+}) => {
   if (!supabase) return;
   try {
     const upserts = Object.entries(settings).map(([key, val]) => {
@@ -373,24 +347,13 @@ export const syncSettingsToSupabase = async (settings: Record<string, any>) => {
     }).filter(Boolean);
 
     if (upserts.length > 0) {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      
-      const res = await fetch("/api/admin/settings/sync", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ upserts })
-      });
-      const data = await res.json();
-      if (!data.success) console.warn("Supabase settings sync error:", data.error);
+      await supabase.from('webnixo_settings_affilate').upsert(upserts);
     }
   } catch (err: any) {
-    console.warn("Supabase settings sync exception:", err.message);
+    console.warn("Supabase settings sync error:", err.message);
   }
 };
+
 export const loadSettingsFromSupabase = async (): Promise<Record<string, string> | null> => {
   if (!supabase) return null;
   try {
@@ -430,32 +393,22 @@ export const syncProfileToSupabase = async (
       referral_code: profile.referralCode,
       custom_coupon_code: profile.customCouponCode || '',
       joined_at: profile.joinedAt,
+      is_admin: profile.email === 'shiva@webnixo.in',
       stats: stats,
       payout_details: payoutDetails,
       updated_at: new Date().toISOString()
     };
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    // Use admin endpoint for syncing
-    const res = await fetch("/api/admin/profiles/update", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({ email: profile.email, data: upsertData })
-    });
-    
-    const data = await res.json();
-    if (!data.success) {
-      console.warn("Error updating profile via admin endpoint:", data.error);
+    const { error } = await supabase.from('webnixo_profiles_affilate').upsert(upsertData, { onConflict: 'email' });
+    if (error) {
+      supabaseErrorState.hasSchemaError = true;
+      supabaseErrorState.errorMessage = error.message;
     }
   } catch (err: any) {
-    console.warn("syncProfileToSupabase exception:", err.message);
+    console.warn("Supabase profile sync error:", err.message);
   }
 };
+
 export const loadProfileFromSupabase = async (email: string): Promise<{
   profile: UserProfile;
   stats: AffiliateStats;
@@ -573,26 +526,12 @@ export const syncPayoutsToSupabase = async (email: string, payouts: PayoutHistor
       transaction_id: item.transactionId || null
     }));
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const res = await fetch("/api/admin/payouts/sync", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({ email, payouts: upserts })
-    });
-    
-    const data = await res.json();
-    if (!data.success) {
-      console.warn("Supabase payouts sync error:", data.error);
-    }
+    await supabase.from('webnixo_payout_history_affilate').upsert(upserts);
   } catch (err: any) {
-    console.warn("Supabase payouts sync exception:", err.message);
+    console.warn("Supabase payouts sync error:", err.message);
   }
 };
+
 export const loadPayoutsFromSupabase = async (email: string): Promise<PayoutHistoryItem[] | null> => {
   if (!supabase) return null;
   try {
@@ -623,24 +562,21 @@ export const loadPayoutsFromSupabase = async (email: string): Promise<PayoutHist
 export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
-
-    const res = await fetch("/api/admin/profiles", {
-      headers: { "Authorization": `Bearer ${session.access_token}` }
-    });
-    const { profiles: data, error } = await res.json();
+    const { data, error } = await supabase
+      .from('webnixo_profiles_affilate')
+      .select('*')
+      .order('joined_at', { ascending: false });
 
     if (error || !data) return null;
 
-    return data.map((u: any) => {
+    return data.map(u => {
       const stats = u.stats || { clicks: 0, signups: 0, sales: 0, commissionEarned: 0, unpaidCommission: 0 };
       const payoutDetailsObj = u.payout_details || {};
       const payoutMethod = payoutDetailsObj.payoutMethod || 'upi';
       const payoutDetails = payoutMethod === 'upi' 
-         ? payoutDetailsObj.upiId || '' 
-         : `${payoutDetailsObj.bankName || ''} (A/C: ${payoutDetailsObj.accountNumber || ''})`;
-         
+        ? payoutDetailsObj.upiId || '' 
+        : `${payoutDetailsObj.bankName || ''} (A/C: ${payoutDetailsObj.accountNumber || ''})`;
+
       return {
         id: u.id,
         email: u.email,
@@ -659,8 +595,7 @@ export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
         payoutDetails: payoutDetails,
         status: u.is_admin ? 'Active' : 'Active', // Defaults to active
         joinedAt: u.joined_at,
-        isRegisteredAffiliate: u.is_registered,
-        isAdmin: u.is_admin
+        isRegisteredAffiliate: u.is_registered
       };
     });
   } catch (err) {
@@ -668,20 +603,18 @@ export const loadAllProfilesFromSupabase = async (): Promise<any[] | null> => {
     return null;
   }
 };
+
 export const loadAllPayoutsFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
-
-    const res = await fetch("/api/admin/payouts", {
-      headers: { "Authorization": `Bearer ${session.access_token}` }
-    });
-    const { payouts: data, error } = await res.json();
+    const { data, error } = await supabase
+      .from('webnixo_payout_history_affilate')
+      .select('*')
+      .order('created_at', { ascending: false });
 
     if (error || !data) return null;
 
-    return data.map((item: any) => ({
+    return data.map(item => ({
       id: item.id,
       userEmail: item.user_email,
       amount: Number(item.amount),
@@ -696,6 +629,7 @@ export const loadAllPayoutsFromSupabase = async (): Promise<any[] | null> => {
     return null;
   }
 };
+
 export const storeOTPInSupabase = async (
   email: string,
   otpCode: string,
@@ -730,14 +664,13 @@ export const storeOTPInSupabase = async (
 export const verifyOTPFromSupabase = async (
   email: string,
   otpCode: string,
-  purpose: string,
-  turnstileToken: string = ''
+  purpose: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     const res = await fetch("/api/auth/verify-otp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, otpCode, purpose, turnstileToken })
+      body: JSON.stringify({ email, otpCode, purpose })
     });
     const data = await res.json();
     if (!res.ok) return { success: false, error: data.error || "Verification failed" };
@@ -762,20 +695,8 @@ export const loadSubscriptionPlansFromSupabase = async (): Promise<any[] | null>
 export const saveSubscriptionPlanToSupabase = async (plan: any): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return { success: false, error: "No session" };
-
-    const res = await fetch("/api/admin/subscription-plans", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify(plan)
-    });
-    
-    const data = await res.json();
-    if (data.error) return { success: false, error: data.error };
+    const { error } = await supabase.from('subscription_plans').upsert(plan);
+    if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
