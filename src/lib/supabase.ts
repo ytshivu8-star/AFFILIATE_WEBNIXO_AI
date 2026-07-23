@@ -380,13 +380,15 @@ where
 -- 3. Fix the Row Level Security (RLS) issue
 alter table plans ENABLE row LEVEL SECURITY;
 
--- Drop the policy if it already exists to avoid errors
+-- Drop the policies if they already exist to avoid errors
 drop policy IF exists "Allow public read on plans" on plans;
+drop policy IF exists "Allow public all on plans" on plans;
 
--- Create a policy that allows anyone (including your website) to read the plans
-create policy "Allow public read on plans" on plans for
-select
-  using (true);`;
+-- Create a policy that allows anyone to read and update the plans (for admin portal)
+create policy "Allow public all on plans" on plans for
+all
+using (true)
+with check (true);`;
 };
 
 // Check connection schema status helper
