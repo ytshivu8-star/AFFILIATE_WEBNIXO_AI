@@ -433,10 +433,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         } else {
           // Defaults if empty or fails
           setSubscriptionPlans([
-            { id: 'free', name: 'Starter Plan', cost: 0, period: 'forever', is_active: true },
-            { id: 'monthly', name: 'Monthly Pass', cost: 49, period: 'mo', is_active: true },
-            { id: 'premium', name: 'Premium Pass', cost: 99, period: 'mo', is_active: true },
-            { id: 'yearly', name: 'Yearly Elite', cost: 499, period: 'yr', is_active: true }
+            { id: 'free', name: 'Starter Plan', price: 0, billing_interval: 'forever', is_active: true },
+            { id: 'monthly', name: 'Monthly Pass', price: 49, billing_interval: 'mo', is_active: true },
+            { id: 'premium', name: 'Premium Pass', price: 99, billing_interval: 'mo', is_active: true },
+            { id: 'yearly', name: 'Yearly Elite', price: 499, billing_interval: 'yr', is_active: true }
           ]);
         }
       }).catch(err => console.warn("Could not load subscription plans from Supabase:", err));
@@ -1762,7 +1762,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     <tr>
                       <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Plan ID</th>
                       <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Name</th>
-                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Cost (₹)</th>
+                      <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Price (₹)</th>
                       <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Period</th>
                       <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px]">Status</th>
                       <th className="p-4 font-bold text-slate-400 uppercase tracking-widest text-[10px] text-right">Actions</th>
@@ -1790,24 +1790,24 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           {editingPlanId === plan.id ? (
                             <input
                               type="number"
-                              value={editPlanData.cost ?? plan.cost}
-                              onChange={(e) => setEditPlanData({ ...editPlanData, cost: Number(e.target.value) })}
+                              value={editPlanData.price ?? plan.price}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, price: Number(e.target.value) })}
                               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white w-20"
                             />
                           ) : (
-                            <span className="text-amber-400 font-bold">₹{plan.cost}</span>
+                            <span className="text-amber-400 font-bold">₹{plan.price}</span>
                           )}
                         </td>
                         <td className="p-4">
                           {editingPlanId === plan.id ? (
                             <input
                               type="text"
-                              value={editPlanData.period ?? plan.period}
-                              onChange={(e) => setEditPlanData({ ...editPlanData, period: e.target.value })}
+                              value={editPlanData.billing_interval ?? plan.billing_interval}
+                              onChange={(e) => setEditPlanData({ ...editPlanData, billing_interval: e.target.value })}
                               className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white w-16"
                             />
                           ) : (
-                            <span className="text-slate-300">{plan.period}</span>
+                            <span className="text-slate-300">{plan.billing_interval}</span>
                           )}
                         </td>
                         <td className="p-4">

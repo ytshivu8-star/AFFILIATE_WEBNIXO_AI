@@ -71,7 +71,11 @@ export interface ReferralEvent {
 export interface SubscriptionPlan {
   id: string;
   name: string;
-  cost: number;
-  period: string;
+  description?: string;
+  price: number;
+  type?: string;
+  billing_interval?: string;
+  credits?: number;
+  features?: any;
   is_active: boolean;
 }

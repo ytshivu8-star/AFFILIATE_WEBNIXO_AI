@@ -765,7 +765,7 @@ export const verifyOTPFromSupabase = async (
 export const loadSubscriptionPlansFromSupabase = async (): Promise<any[] | null> => {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase.from('subscription_plans').select('*').order('cost', { ascending: true });
+    const { data, error } = await supabase.from('plans').select('*').order('price', { ascending: true });
     if (error) return null;
     return data;
   } catch (err) {
@@ -776,7 +776,7 @@ export const loadSubscriptionPlansFromSupabase = async (): Promise<any[] | null>
 export const saveSubscriptionPlanToSupabase = async (plan: any): Promise<{ success: boolean; error?: string }> => {
   if (!supabase) return { success: false, error: "Supabase not configured" };
   try {
-    const { error } = await supabase.from('subscription_plans').upsert(plan);
+    const { error } = await supabase.from('plans').upsert(plan);
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {
