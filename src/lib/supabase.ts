@@ -436,6 +436,8 @@ alter table webnixo_events_affilate ENABLE row LEVEL SECURITY;
 alter table webnixo_otps_affilate ENABLE row LEVEL SECURITY;
 alter table webnixo_payout_history_affilate ENABLE row LEVEL SECURITY;
 alter table webnixo_settings_affilate ENABLE row LEVEL SECURITY;
+alter table coupons ENABLE row LEVEL SECURITY;
+
 
 
 -- Create open policies so app can read/write without auth token
@@ -456,6 +458,9 @@ create policy "Allow public all on webnixo_payout_history_affilate" on webnixo_p
 
 drop policy IF exists "Allow public all on webnixo_settings_affilate" on webnixo_settings_affilate;
 create policy "Allow public all on webnixo_settings_affilate" on webnixo_settings_affilate for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on coupons" on coupons;
+create policy "Allow public all on coupons" on coupons for all using (true) with check (true);
 
 
 -- Drop the policies if they already exist to avoid errors

@@ -130,6 +130,14 @@ export default function Dashboard({ user, stats, events, chartData, onUpdateUser
           setCouponError(`The coupon code "${cleanCode}" is already claimed in the cloud database. Please choose a unique code.`);
           return;
         }
+
+        // Add to coupons table
+        await supabase.from('coupons').upsert({
+          code: cleanCode,
+          discount_percent: 20,
+          description: `Custom affiliate coupon for ${user.fullName}`,
+          is_active: true
+        }, { onConflict: 'code' });
       } catch (err) {
         console.warn("Supabase coupon uniqueness check skipped or failed:", err);
       }
