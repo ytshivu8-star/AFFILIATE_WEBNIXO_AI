@@ -72,6 +72,14 @@ create table if not exists conversions (
   created_at timestamp with time zone default NOW()
 );
 
+
+-- Drop existing affiliate tables to ensure schema updates apply cleanly
+drop table if exists webnixo_profiles_affilate cascade;
+drop table if exists webnixo_events_affilate cascade;
+drop table if exists webnixo_otps_affilate cascade;
+drop table if exists webnixo_payout_history_affilate cascade;
+drop table if exists webnixo_settings_affilate cascade;
+
 -- 5. Affiliate Profiles
 create table if not exists webnixo_profiles_affilate (
   email TEXT primary key,
