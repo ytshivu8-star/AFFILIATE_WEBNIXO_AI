@@ -130,6 +130,7 @@ create table if not exists coupons (
   discount_percent INTEGER,
   description TEXT,
   is_active BOOLEAN default true,
+  used_count INTEGER default 0,
   created_at timestamp with time zone default NOW()
 );
 

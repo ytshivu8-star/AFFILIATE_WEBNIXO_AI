@@ -23,6 +23,15 @@ export default function Dashboard({ user, stats, events, chartData, onUpdateUser
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState(false);
   const [isEditingCoupon, setIsEditingCoupon] = useState(false);
+  const [couponUsedCount, setCouponUsedCount] = useState(0);
+
+  useEffect(() => {
+    if (isSupabaseConfigured() && user.customCouponCode) {
+      supabase.from('coupons').select('used_count').eq('code', user.customCouponCode).maybeSingle().then(({ data }) => {
+        if (data) setCouponUsedCount(data.used_count || 0);
+      });
+    }
+  }, [user.customCouponCode]);
   const [copiedRoute, setCopiedRoute] = useState<string | null>(null);
 
   const routesList = [
@@ -286,9 +295,12 @@ export default function Dashboard({ user, stats, events, chartData, onUpdateUser
                   Edit
                 </button>
               </div>
-              <p className="text-[10px] text-emerald-600 font-semibold text-center flex items-center justify-center gap-1">
+              <div className="text-[10px] text-emerald-600 font-semibold text-center flex items-center justify-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Coupon is active! Shares tracked automatically.
-              </p>
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[11px] font-semibold mt-2 w-fit mx-auto">
+                <Award className="h-3.5 w-3.5" /> Times Used: {couponUsedCount}
+              </div>
             </div>
           ) : (
             <form onSubmit={handleCreateCoupon} className="space-y-2 mt-auto">

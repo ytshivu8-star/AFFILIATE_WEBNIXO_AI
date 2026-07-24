@@ -16,13 +16,13 @@ app.use(express.json());
 
 // API: Check Resend connection and configuration status
 app.get("/api/resend-status", (req, res) => {
-  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+  let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
   rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
   let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
   rawFromEmail = rawFromEmail.replace(/^["']|["']$/g, "").trim();
 
-  const isCustomKey = rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj" && rawApiKey.length > 10;
+  const isCustomKey = rawApiKey.length > 10;
   
   let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
   if (rawFromEmail) {
@@ -269,7 +269,7 @@ app.post("/api/send-otp", async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields (toEmail, otpCode, purpose)" });
     }
 
-    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj").trim();
+    let rawApiKey = (process.env.VITE_RESEND_API_KEY || process.env.RESEND_API_KEY || "").trim();
     rawApiKey = rawApiKey.replace(/^["']|["']$/g, "").trim();
 
     let rawFromEmail = (process.env.VITE_RESEND_FROM_EMAIL || process.env.RESEND_FROM_EMAIL || "").trim();
@@ -279,7 +279,7 @@ app.post("/api/send-otp", async (req, res) => {
     let fromEmail = "WEBNIXO AI <onboarding@resend.dev>";
     if (rawFromEmail) {
       fromEmail = rawFromEmail;
-    } else if (rawApiKey !== "re_KANKrYPv_NCYbaoLUnEauu2TbhyCnnMKj") {
+    } else if (rawApiKey && rawApiKey.length > 10) {
       // If they provided their own key and haven't explicitly set a custom from email,
       // default to their verified domain auth.webnixo.in!
       fromEmail = "WEBNIXO AI <no-reply@auth.webnixo.in>";
