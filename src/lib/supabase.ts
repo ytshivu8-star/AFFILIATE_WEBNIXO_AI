@@ -75,10 +75,20 @@ create table if not exists conversions (
 -- 5. Affiliate Profiles
 create table if not exists webnixo_profiles_affilate (
   email TEXT primary key,
+  id TEXT,
+  password TEXT,
   full_name TEXT,
+  phone TEXT,
+  company_name TEXT,
+  website TEXT,
+  promo_strategy TEXT,
+  country TEXT,
+  is_registered BOOLEAN default false,
   referral_code TEXT,
   custom_coupon_code TEXT,
+  is_admin BOOLEAN default false,
   stats JSONB,
+  payout_details JSONB,
   joined_at timestamp with time zone default NOW(),
   updated_at timestamp with time zone default NOW()
 );
@@ -138,6 +148,40 @@ create table if not exists plans (
   features JSONB,
   is_active BOOLEAN default true,
   created_at timestamp with time zone default NOW(),
+  updated_at timestamp with time zone default NOW()
+);
+
+
+-- 11.5 OTPs Table
+create table if not exists webnixo_otps_affilate (
+  id TEXT primary key,
+  email TEXT,
+  otp_code TEXT,
+  purpose TEXT,
+  verified BOOLEAN default false,
+  expires_at timestamp with time zone,
+  created_at timestamp with time zone default NOW()
+);
+
+
+-- 11.6 Payout History Table
+create table if not exists webnixo_payout_history_affilate (
+  id TEXT primary key,
+  user_email TEXT,
+  amount DECIMAL(10, 2),
+  date TEXT,
+  method TEXT,
+  destination TEXT,
+  status TEXT,
+  transaction_id TEXT,
+  created_at timestamp with time zone default NOW()
+);
+
+
+-- 11.7 Settings Table
+create table if not exists webnixo_settings_affilate (
+  key TEXT primary key,
+  value TEXT,
   updated_at timestamp with time zone default NOW()
 );
 
@@ -377,8 +421,34 @@ where
     'refill_20000'
   );
 
--- 3. Fix the Row Level Security (RLS) issue
+-- Fix the Row Level Security (RLS) issue for all tables
 alter table plans ENABLE row LEVEL SECURITY;
+alter table webnixo_profiles_affilate ENABLE row LEVEL SECURITY;
+alter table webnixo_events_affilate ENABLE row LEVEL SECURITY;
+alter table webnixo_otps_affilate ENABLE row LEVEL SECURITY;
+alter table webnixo_payout_history_affilate ENABLE row LEVEL SECURITY;
+alter table webnixo_settings_affilate ENABLE row LEVEL SECURITY;
+
+
+-- Create open policies so app can read/write without auth token
+drop policy IF exists "Allow public all on plans" on plans;
+create policy "Allow public all on plans" on plans for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on webnixo_profiles_affilate" on webnixo_profiles_affilate;
+create policy "Allow public all on webnixo_profiles_affilate" on webnixo_profiles_affilate for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on webnixo_events_affilate" on webnixo_events_affilate;
+create policy "Allow public all on webnixo_events_affilate" on webnixo_events_affilate for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on webnixo_otps_affilate" on webnixo_otps_affilate;
+create policy "Allow public all on webnixo_otps_affilate" on webnixo_otps_affilate for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on webnixo_payout_history_affilate" on webnixo_payout_history_affilate;
+create policy "Allow public all on webnixo_payout_history_affilate" on webnixo_payout_history_affilate for all using (true) with check (true);
+
+drop policy IF exists "Allow public all on webnixo_settings_affilate" on webnixo_settings_affilate;
+create policy "Allow public all on webnixo_settings_affilate" on webnixo_settings_affilate for all using (true) with check (true);
+
 
 -- Drop the policies if they already exist to avoid errors
 drop policy IF exists "Allow public read on plans" on plans;

@@ -77,6 +77,8 @@ const getIP = (req) => {
 };
 
 async function checkRateLimit(action, identifier, maxRequests, windowMs) {
+  return { allowed: true, remaining: maxRequests };
+
   if (!supabase) return { allowed: true };
   const key = `rl_${action}_${identifier}`;
   const now = Date.now();

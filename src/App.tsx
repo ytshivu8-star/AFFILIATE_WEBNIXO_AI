@@ -663,6 +663,7 @@ export default function App() {
       return;
     }
 
+    if (cleanEmail && passwordInput.length < 6) { alert('Password must be at least 6 characters.'); return; }
     if (cleanEmail && passwordInput.length >= 6) {
       if (authMode === 'signup') {
         const signupRes = await fetch('/api/auth/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: cleanEmail }) });
